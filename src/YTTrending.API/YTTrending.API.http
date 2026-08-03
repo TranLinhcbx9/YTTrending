@@ -1,0 +1,6 @@
+@YTTrending.API_HostAddress = http://localhost:5118
+
+GET {{YTTrending.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

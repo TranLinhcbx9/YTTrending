@@ -1,0 +1,11 @@
+E:\WorkSpace\Code\YTTrending\src\YTTrending.Domain\bin\Debug\net8.0\YTTrending.Domain.deps.json
+E:\WorkSpace\Code\YTTrending\src\YTTrending.Domain\bin\Debug\net8.0\YTTrending.Domain.dll
+E:\WorkSpace\Code\YTTrending\src\YTTrending.Domain\bin\Debug\net8.0\YTTrending.Domain.pdb
+E:\WorkSpace\Code\YTTrending\src\YTTrending.Domain\obj\Debug\net8.0\YTTrending.Domain.GeneratedMSBuildEditorConfig.editorconfig
+E:\WorkSpace\Code\YTTrending\src\YTTrending.Domain\obj\Debug\net8.0\YTTrending.Domain.AssemblyInfoInputs.cache
+E:\WorkSpace\Code\YTTrending\src\YTTrending.Domain\obj\Debug\net8.0\YTTrending.Domain.AssemblyInfo.cs
+E:\WorkSpace\Code\YTTrending\src\YTTrending.Domain\obj\Debug\net8.0\YTTrending.Domain.csproj.CoreCompileInputs.cache
+E:\WorkSpace\Code\YTTrending\src\YTTrending.Domain\obj\Debug\net8.0\YTTrending.Domain.dll
+E:\WorkSpace\Code\YTTrending\src\YTTrending.Domain\obj\Debug\net8.0\refint\YTTrending.Domain.dll
+E:\WorkSpace\Code\YTTrending\src\YTTrending.Domain\obj\Debug\net8.0\YTTrending.Domain.pdb
+E:\WorkSpace\Code\YTTrending\src\YTTrending.Domain\obj\Debug\net8.0\ref\YTTrending.Domain.dll
