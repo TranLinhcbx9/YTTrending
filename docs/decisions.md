@@ -24,6 +24,19 @@
 - **Dùng `TimeProvider` thay `DateTime.UtcNow`**: gần như mọi rule đều dính thời gian (RecentDays, velocity, retention) — không abstract thì không test được.
 - **Test bằng EF Core Sqlite in-memory**, không dùng EF InMemory provider (không enforce constraint, dịch query khác Postgres).
 
+### Setup base (chốt 05/08/2026 — xem [`../ai/setup-base.md`](../ai/setup-base.md))
+
+- **Config đọc từ `appsettings.json` + Options pattern** *(đóng pending #3)*: bind qua `ValidateOnStart`, handler dùng `IOptionsMonitor`. Bảng `app_config` **không tạo** trong migration đầu tiên — để dành Phase 2 khi có UI sửa config runtime. Secrets (connection string, YouTube API key) nằm trong `dotnet user-secrets`.
+- **DB local: Postgres cài sẵn trên máy**, database riêng `yttrending_dev` — không dùng Docker.
+- **`videos.status` lưu VARCHAR + `HasConversion<string>()`**, không dùng native Postgres ENUM: tránh phải viết `ALTER TYPE` thủ công mỗi lần thêm trạng thái, và giữ schema tạo được trên Sqlite.
+- **Tên bảng/cột `snake_case`** qua `EFCore.NamingConventions` — phải bật trước migration đầu tiên.
+- **Logging: Serilog + file sink**, rolling theo ngày, giữ 7 ngày — vì job chạy đêm cần đọc lại log vào sáng hôm sau.
+- **Frontend: Angular 20+, để ở repo riêng.** Backend chỉ là API thuần, không host static file, không có project FE trong solution. Kéo theo: API phải bật CORS, và hợp đồng JSON (camelCase, enum trả string, list bọc `PagedResult`, lỗi cùng một hình dạng) phải giữ ổn định vì đổi là sửa cả hai repo.
+- **`swagger.json` chỉ dùng để tham chiếu**, không sinh TypeScript client tự động — model bên Angular viết tay. Đổi lại phải kỷ luật: đổi shape DTO ở BE thì tự nhớ sửa interface bên FE, compiler không báo giúp.
+- **Test hoãn sang phase sau**: base không tạo test project. Vẫn giữ `IYouTubeClient` và `TimeProvider` vì đó là thiết kế (chạy được `FakeYouTubeClient`, tua được thời gian khi debug), không phải công việc viết test.
+- **Audit `created_at`/`updated_at` làm bằng override `SaveChanges` trong `AppDbContext`**, không dùng `SaveChangesInterceptor`: chỉ có 1 DbContext và 1 mối quan tâm lúc save, interceptor không chặn thêm lỗi nào mà lại khó tìm hơn (cùng lý do đã bỏ Repository). Cắt sang interceptor khi xuất hiện mối quan tâm thứ hai — soft-delete tự động, domain events, outbox.
+- **Không đưa vào base**: Repository/Specification, AutoMapper, `BaseController<T>` generic, Unit of Work, caching, API versioning, health check, rate limiting, Docker hóa API.
+
 ## Pending (chưa chốt)
 
 ### 1. Snapshot frequency tách riêng khỏi Sync Interval?
@@ -42,14 +55,6 @@ Với 20–50 channel, sync mỗi vài giờ, cần kiểm tra thực tế quota
 
 → Ảnh hưởng: [`domain/background-jobs.md`](domain/background-jobs.md), [`domain/channel-management.md`](domain/channel-management.md).
 
-### 3. Config đọc từ đâu — `appsettings.json` hay bảng `app_config`?
+### ~~3. Config đọc từ đâu — `appsettings.json` hay bảng `app_config`?~~ ✅ ĐÃ CHỐT
 
-Hai tài liệu đang mô tả khác nhau:
-- [`config.md`](config.md) và bảng `app_config` trong [`database.md`](database.md): config lưu **key-value trong DB**.
-- [`architecture.md`](architecture.md): config đọc từ **`appsettings.json`** qua Options pattern + `ValidateOnStart`.
-
-**Đề xuất:** Phase 1 dùng `appsettings.json` + `IOptionsMonitor` (sửa file là ăn ngay, không cần restart, không cần code gì thêm). Bảng `app_config` giữ nguyên trong schema nhưng **chưa dùng** — chỉ cần thiết khi có màn hình UI cho phép sửa config lúc runtime (Phase 2).
-
-Nếu chốt theo đề xuất này thì phải sửa lại phần "Config Principle" ở [`config.md`](config.md) cho khớp.
-
-→ Ảnh hưởng: [`config.md`](config.md), [`database.md`](database.md), [`architecture.md`](architecture.md).
+Chốt `appsettings.json` + Options pattern — xem mục "Setup base" ở trên. [`config.md`](config.md) và [`database.md`](database.md) đã sửa cho khớp.

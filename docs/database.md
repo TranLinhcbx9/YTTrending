@@ -38,7 +38,8 @@ Danh sách video Shorts phát hiện được từ các kênh theo dõi.
 | published_at | TIMESTAMPTZ | Thời điểm video đăng trên YouTube |
 | duration_seconds | INT | Thời lượng video (giây) |
 | category | VARCHAR(64), NULL | Danh mục nội dung, chưa dùng ở Phase 1 |
-| status | ENUM('NEW','TRACKING','ARCHIVED') | Trạng thái vòng đời video |
+| status | VARCHAR(16) | Trạng thái vòng đời video: `New` / `Tracking` / `Archived`. Lưu chuỗi qua `HasConversion<string>()`, **không** dùng native Postgres ENUM — xem ghi chú cuối file |
+| archived_at | TIMESTAMPTZ, NULL | Thời điểm chuyển sang ARCHIVED. Đồng hồ đếm `ArchivedRetentionDays` của Cleanup Job — xem ghi chú cuối file |
 | deleted_at | TIMESTAMPTZ, NULL | Thời điểm soft-delete, NULL nghĩa là chưa xóa |
 | created_at | TIMESTAMPTZ | Thời điểm hệ thống phát hiện video |
 | updated_at | TIMESTAMPTZ | Thời điểm cập nhật gần nhất (title/thumbnail đổi...) |
@@ -89,7 +90,9 @@ Video được bookmark lại để tham khảo ý tưởng.
 
 ---
 
-## 6. app_config
+## 6. app_config — ⚠️ CHƯA DÙNG Ở PHASE 1
+
+> Phase 1 đọc config từ `appsettings.json` + Options pattern ([`config.md`](config.md)), **không tạo bảng này trong migration đầu tiên**. Giữ lại mô tả ở đây cho Phase 2, khi có UI sửa config lúc runtime.
 
 Cấu hình hệ thống dạng key-value, không hardcode trong code.
 
@@ -107,4 +110,9 @@ Cấu hình hệ thống dạng key-value, không hardcode trong code.
 - **TIMESTAMPTZ** cho mọi mốc thời gian: tránh lỗi lệch múi giờ khi server và client khác timezone.
 - **NUMERIC** thay vì FLOAT cho các trường tính toán (score, growth %): tránh sai số dấu phẩy động khi so sánh/sắp xếp.
 - **BIGINT** cho views/likes/comments: video viral có thể vượt giới hạn INT (2.1 tỷ).
-- **ENUM** cho status: giới hạn giá trị hợp lệ ngay ở DB, tránh nhập sai chuỗi tự do.
+- **VARCHAR cho status, không dùng native Postgres ENUM**: native ENUM chặn giá trị sai chặt hơn, nhưng mỗi lần thêm một trạng thái phải viết migration `ALTER TYPE` thủ công (EF Core không tự sinh), và làm vỡ bước tạo schema khi test bằng Sqlite in-memory. Giá trị hợp lệ đã được `VideoStatus` enum ở tầng Domain chặn rồi.
+- **Tên bảng/cột dùng `snake_case`**: EF Core mặc định sinh `PascalCase`, nên phải bật `UseSnakeCaseNamingConvention()` (package `EFCore.NamingConventions`) — quyết định này phải có **trước migration đầu tiên**.
+- **`created_at` / `updated_at` của `channels` và `videos`** điền tự động: `AppDbContext` override `SaveChanges`/`SaveChangesAsync`, duyệt `ChangeTracker` và lấy giờ từ `TimeProvider` — không set tay ở handler. Lưu ý `ExecuteUpdateAsync` không đi qua `SaveChanges` nên phải tự set `updated_at` trong câu update đó.
+- **`archived_at` là cột bắt buộc, không thể thay bằng `updated_at`**: rule retention ở [`domain/video-lifecycle.md`](domain/video-lifecycle.md) tính từ lúc video **chuyển sang ARCHIVED**, trong khi `updated_at` bị đẩy lại mỗi lần Sync Job sửa title/thumbnail. Dùng `updated_at` làm đồng hồ retention thì video ARCHIVED nào bị đổi tiêu đề sẽ không bao giờ đủ hạn để Cleanup Job dọn. Cột này do `Video.Archive()` set, thuộc nhóm thời gian nghiệp vụ (set tường minh), không phải audit.
+- **`snapshot_at` và `calculated_at` KHÔNG phải audit field** — chúng là dữ liệu nghiệp vụ (thời điểm đo số liệu / thời điểm tính điểm), phải set tường minh ở chỗ tạo record, không để interceptor điền ngầm.
+- **`DateTimeOffset` cho mọi cột thời gian ở tầng code** (map sang `TIMESTAMPTZ`), không dùng `DateTime` — khớp với `TimeProvider.GetUtcNow()` và không phải đoán `DateTimeKind`.

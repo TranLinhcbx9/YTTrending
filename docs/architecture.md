@@ -282,7 +282,7 @@ services.AddOptions<TrackingOptions>()
 
 Handler inject `IOptionsMonitor<T>` (không phải `IOptions<T>`) để sửa `appsettings.json` là ăn ngay, khỏi restart.
 
-> ⚠️ [`config.md`](config.md) và bảng `app_config` trong [`database.md`](database.md) mô tả config lưu key-value **trong DB**. Hai nguồn này chưa thống nhất — xem [`decisions.md`](decisions.md) pending #3.
+> ✅ Đã chốt (pending #3 đóng): dùng `appsettings.json`, bảng `app_config` **không tạo** ở Phase 1. [`config.md`](config.md) và [`database.md`](database.md) đã sửa cho khớp.
 
 ## Thời gian: dùng `TimeProvider`, không dùng `DateTime.UtcNow`
 

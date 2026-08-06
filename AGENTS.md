@@ -27,6 +27,8 @@ Công cụ cá nhân theo dõi kênh YouTube Shorts đối thủ, tự động t
 | [`docs/decisions.md`](docs/decisions.md) | Pending items + quyết định đã chốt (ADR-style) |
 | [`docs/out-of-scope.md`](docs/out-of-scope.md) | Những gì Phase 1 KHÔNG làm |
 | [`ai/current.md`](ai/current.md) | Đang làm module nào, block ở đâu |
+| [`ai/setup-base.md`](ai/setup-base.md) | Checklist dựng base BE — chỉ liệt kê việc cần làm |
+| [`ai/setup-base-notes.md`](ai/setup-base-notes.md) | Ghi chú chi tiết cho từng mục của checklist: cách làm, code mẫu, cạm bẫy |
 
 ## Nguyên tắc chung của dự án
 

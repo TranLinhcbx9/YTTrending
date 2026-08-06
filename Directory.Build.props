@@ -1,0 +1,17 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Nullable warning là error ngay từ khi repo còn trống (setup-base-notes.md A2).
+         CS8600-CS8655 là dải warning của nullable reference types. -->
+    <WarningsAsErrors>nullable</WarningsAsErrors>
+
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>
