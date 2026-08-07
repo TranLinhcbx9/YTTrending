@@ -1,16 +1,17 @@
 # Video Tracking Lifecycle
 
 ```
-NEW
- ↓
-TRACKING
- ↓
-ARCHIVED
+NEW ──────────┐
+ │            ↓
+ ↓         ARCHIVED (terminal)
+TRACKING ─────┘
 ```
 
 ## NEW
 
 Video vừa phát hiện, đã đạt `MinViewsThreshold`.
+
+Có thể chuyển thẳng sang ARCHIVED mà **không** qua TRACKING — nếu video rớt khỏi recent list (`RecentShortsLimit`) trước khi kịp `StartTracking()`. `Video.Archive()` chỉ chặn khi đã ARCHIVED (terminal-state), không giới hạn trạng thái nguồn — tránh video kẹt vĩnh viễn ở NEW.
 
 ## TRACKING
 

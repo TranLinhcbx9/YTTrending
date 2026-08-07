@@ -39,6 +39,9 @@ Danh sách video Shorts phát hiện được từ các kênh theo dõi.
 | duration_seconds | INT | Thời lượng video (giây) |
 | category | VARCHAR(64), NULL | Danh mục nội dung, chưa dùng ở Phase 1 |
 | status | VARCHAR(16) | Trạng thái vòng đời video: `New` / `Tracking` / `Archived`. Lưu chuỗi qua `HasConversion<string>()`, **không** dùng native Postgres ENUM — xem ghi chú cuối file |
+| latest_views | BIGINT | View tại lần snapshot gần nhất — denormalize từ `video_metric_snapshots` để dashboard filter/sort theo views không phải join. Chỉ 1 nơi ghi: Metrics Update Job, ghi đè mỗi lần sync |
+| latest_likes | BIGINT | Like tại lần snapshot gần nhất, cùng cơ chế với `latest_views` |
+| latest_comments | BIGINT | Comment tại lần snapshot gần nhất, cùng cơ chế với `latest_views` |
 | archived_at | TIMESTAMPTZ, NULL | Thời điểm chuyển sang ARCHIVED. Đồng hồ đếm `ArchivedRetentionDays` của Cleanup Job — xem ghi chú cuối file |
 | deleted_at | TIMESTAMPTZ, NULL | Thời điểm soft-delete, NULL nghĩa là chưa xóa |
 | created_at | TIMESTAMPTZ | Thời điểm hệ thống phát hiện video |
@@ -72,7 +75,7 @@ Lịch sử số liệu (views/likes/comments) của video theo từng lần syn
 | velocity_per_hour | NUMERIC(14,2) | Tốc độ tăng view (views/giờ) |
 | view_growth_norm | NUMERIC(5,2) | ViewGrowth đã chuẩn hóa về thang 0–100 |
 | velocity_norm | NUMERIC(5,2) | Velocity đã chuẩn hóa về thang 0–100 |
-| trending_score | NUMERIC(5,2) | Điểm trending cuối cùng, dùng để xếp hạng |
+| score | NUMERIC(5,2) | Điểm trending cuối cùng, dùng để xếp hạng. Tên cột (không phải `trending_score`) vì property tương ứng ở Domain là `TrendingScore.Score` — class không được có member trùng tên class (CS0542) |
 | calculated_at | TIMESTAMPTZ | Thời điểm tính điểm gần nhất |
 
 ---

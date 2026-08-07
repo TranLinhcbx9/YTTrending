@@ -421,11 +421,17 @@ Ghi chú lúc làm:
 - [ ] `Common/AuditableEntity.cs` (A4)
 - [ ] `Entities/`: `Channel`, `Video`, `VideoMetricSnapshot`, `TrendingScore`, `SavedIdea`
 
-Theo đúng [`../docs/database.md`](../docs/database.md). Quy tắc: private setter + static factory `Create(...)`, không object initializer.
+Theo đúng [`../docs/database.md`](../docs/database.md). Quy tắc: private setter + static factory `Create(...)`, không object initializer (object initializer **bên trong** static factory thì hợp lệ — private setter đã chặn caller ngoài rồi).
+
+`videos` có thêm 3 cột denormalize `latest_views` / `latest_likes` / `latest_comments` (BIGINT) — Metrics Update Job ghi đè mỗi lần sync, dashboard filter/sort theo views không phải join `video_metric_snapshots`. `trending_scores.trending_score` đổi tên cột thành `score` (property Domain là `TrendingScore.Score` — class không được có member trùng tên class, CS0542). Cả hai đã cập nhật ở [`../docs/database.md`](../docs/database.md).
 
 Hai invariant phải nằm ở đây, không để Application tự set:
-- `Video.Archive(now)` — ném lỗi nếu đã ARCHIVED (terminal state), đồng thời set `ArchivedAt`
+- `Video.Archive(now)` — ném lỗi nếu đã ARCHIVED (terminal state), đồng thời set `ArchivedAt`. Không giới hạn trạng thái nguồn — NEW → ARCHIVED thẳng vẫn hợp lệ (xem [`../docs/domain/video-lifecycle.md`](../docs/domain/video-lifecycle.md))
 - `Video.StartTracking()` — chỉ từ NEW
+
+⚠️ **Nullable + EF Core** (`WarningsAsErrors=nullable` đang bật — A2): private constructor chỉ nhận đúng các property kiểu reference non-nullable, EF Core tự bind theo tên param (camelCase ↔ PascalCase) lúc materialize, phần còn lại EF ghi qua backing field. Entity không có property reference non-nullable nào (`VideoMetricSnapshot`, `TrendingScore`, `SavedIdea`) vẫn phải khai `private Xxx() { }` rỗng **tường minh** — thiếu dòng này C# tự sinh ctor public, phá luôn static factory. Navigation property luôn `= null!` (EF chỉ gán khi `Include`). Nếu EF không bind được ctor có param (chỉ lộ ra lúc build model ở S4, không phải S2): fallback `private Xxx() { }` rỗng + `= null!` trên từng property, sửa ~5 phút.
+
+Invariant vi phạm ném `InvalidOperationException`, không tạo `DomainException` riêng — đây là bug gọi sai thứ tự ở Application, không phải lỗi nghiệp vụ dự kiến được nên không đi qua `Result` ([`../docs/architecture.md`](../docs/architecture.md)).
 
 ✅ Nghiệm thu: build sạch, không project nào reference vào Domain ngoài Application.
 
