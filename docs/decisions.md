@@ -39,12 +39,13 @@
 
 ### Domain — mục 2 (chốt 05/08/2026)
 
-- **`videos` có thêm 3 cột denormalize** `latest_views` / `latest_likes` / `latest_comments` (BIGINT): schema gốc không có, nhưng dashboard filter/sort theo views và `setup-base-notes.md` (A17) đã giả định sẵn cột này. Metrics Update Job ghi đè mỗi lần sync — chỉ 1 writer nên không sợ lệch với snapshot mới nhất. [`database.md`](database.md) đã cập nhật.
+- **`videos` có thêm 3 cột denormalize** `latest_views` / `latest_likes` / `latest_comments` (BIGINT): schema gốc không có, nhưng dashboard filter/sort theo views và `setup-base-notes.md` (A17) đã giả định sẵn cột này. Discovery seed lần đầu (đã cầm sẵn số liệu từ bước lọc `MinViewsThreshold`), sau đó Metrics Update Job ghi đè mỗi lần sync — cả hai đều ghi đè toàn bộ, không cộng dồn, nên không lệch với snapshot mới nhất. [`database.md`](database.md) đã cập nhật.
 - **Navigation property: 1 chiều từ `Video`** — `Video.Channel`, `Video.TrendingScore`, `Video.SavedIdea`. Không có `Channel.Videos` hay `Video.Snapshots` (collection ngược), tránh vô tình `Include` cả nghìn dòng snapshot.
-- **`Video.Archive()` cho phép từ NEW lẫn TRACKING** — chỉ chặn khi đã ARCHIVED (đúng nghĩa chặn terminal-state). Video rớt khỏi recent list trước khi kịp `StartTracking()` vẫn archive được, không kẹt vĩnh viễn ở NEW. [`domain/video-lifecycle.md`](domain/video-lifecycle.md) đã cập nhật.
+- **`VideoStateRules.Archive()` cho phép từ NEW lẫn TRACKING** — chỉ chặn khi đã ARCHIVED (đúng nghĩa chặn terminal-state). Video rớt khỏi recent list trước khi kịp `StartTracking()` vẫn archive được, không kẹt vĩnh viễn ở NEW. [`domain/video-lifecycle.md`](domain/video-lifecycle.md) đã cập nhật.
 - **`TrendingScore.Score`, không phải `TrendingScore.TrendingScore`**: class không được có member trùng tên class (CS0542). Cột DB đổi theo: `trending_score` → `score`.
-- **`SavedIdea.CreatedAt` set trong static factory**, không tạo interface `IHasCreatedAt` riêng — chỉ một chỗ duy nhất tạo ra `SavedIdea`, không sợ quên.
+- **`SavedIdea` kế thừa `AuditableEntity`** (chốt lại 07/08/2026, thay cho phương án `IHasCreatedAt`) — bảng `saved_ideas` vì thế có thêm cột `updated_at`. Hợp lý vì `note` sửa được, và `created_at` ở đây đúng nghĩa "row sinh lúc nào" (bookmark = insert, không lệch được) nên để audit điền là chuẩn — khác `snapshot_at`/`calculated_at`.
 - **Invariant vi phạm ném `InvalidOperationException`**, không tạo `DomainException` riêng: chuyển trạng thái sai là bug gọi sai thứ tự ở Application, không phải lỗi nghiệp vụ dự kiến được nên không đi qua `Result`. Tách exception riêng khi nào có chỗ cần catch phân biệt.
+- **Entity là anemic — chỉ property, không method** (chốt 07/08/2026, sau khi đã làm xong theo hướng ngược lại). Đo lúc quyết định: cả Domain chỉ có 2 câu `if`, 8/15 method là nghi lễ gán thuần quanh `private set`. `required` thay vai trò "tạo xong là đủ field" của static factory; 2 invariant dời sang `Application/Common/VideoStateRules.cs`. **Đánh đổi đã biết:** rule terminal-state từ ràng buộc compiler thành quy ước (`video.Status = ...` compile được), test chuyển trạng thái từ unit test thuần thành test qua handler. Đổi lúc Application còn trống nên không phải sửa call site nào.
 
 ## Pending (chưa chốt)
 

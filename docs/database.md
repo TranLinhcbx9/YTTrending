@@ -39,7 +39,7 @@ Danh sách video Shorts phát hiện được từ các kênh theo dõi.
 | duration_seconds | INT | Thời lượng video (giây) |
 | category | VARCHAR(64), NULL | Danh mục nội dung, chưa dùng ở Phase 1 |
 | status | VARCHAR(16) | Trạng thái vòng đời video: `New` / `Tracking` / `Archived`. Lưu chuỗi qua `HasConversion<string>()`, **không** dùng native Postgres ENUM — xem ghi chú cuối file |
-| latest_views | BIGINT | View tại lần snapshot gần nhất — denormalize từ `video_metric_snapshots` để dashboard filter/sort theo views không phải join. Chỉ 1 nơi ghi: Metrics Update Job, ghi đè mỗi lần sync |
+| latest_views | BIGINT | View tại lần snapshot gần nhất — denormalize từ `video_metric_snapshots` để dashboard filter/sort theo views không phải join. **Discovery seed lần đầu** (bước lọc `MinViewsThreshold` đã cầm sẵn số liệu — xem ghi chú cuối file), sau đó Metrics Update Job ghi đè mỗi lần sync |
 | latest_likes | BIGINT | Like tại lần snapshot gần nhất, cùng cơ chế với `latest_views` |
 | latest_comments | BIGINT | Comment tại lần snapshot gần nhất, cùng cơ chế với `latest_views` |
 | archived_at | TIMESTAMPTZ, NULL | Thời điểm chuyển sang ARCHIVED. Đồng hồ đếm `ArchivedRetentionDays` của Cleanup Job — xem ghi chú cuối file |
@@ -90,6 +90,7 @@ Video được bookmark lại để tham khảo ý tưởng.
 | video_id | INT UNIQUE (FK → videos.id) | Video được bookmark, UNIQUE đảm bảo 1 video chỉ bookmark 1 lần |
 | note | TEXT, NULL | Ghi chú tự do của người dùng |
 | created_at | TIMESTAMPTZ | Thời điểm bookmark |
+| updated_at | TIMESTAMPTZ | Thời điểm sửa `note` gần nhất |
 
 ---
 
@@ -116,6 +117,7 @@ Cấu hình hệ thống dạng key-value, không hardcode trong code.
 - **VARCHAR cho status, không dùng native Postgres ENUM**: native ENUM chặn giá trị sai chặt hơn, nhưng mỗi lần thêm một trạng thái phải viết migration `ALTER TYPE` thủ công (EF Core không tự sinh), và làm vỡ bước tạo schema khi test bằng Sqlite in-memory. Giá trị hợp lệ đã được `VideoStatus` enum ở tầng Domain chặn rồi.
 - **Tên bảng/cột dùng `snake_case`**: EF Core mặc định sinh `PascalCase`, nên phải bật `UseSnakeCaseNamingConvention()` (package `EFCore.NamingConventions`) — quyết định này phải có **trước migration đầu tiên**.
 - **`created_at` / `updated_at` của `channels` và `videos`** điền tự động: `AppDbContext` override `SaveChanges`/`SaveChangesAsync`, duyệt `ChangeTracker` và lấy giờ từ `TimeProvider` — không set tay ở handler. Lưu ý `ExecuteUpdateAsync` không đi qua `SaveChanges` nên phải tự set `updated_at` trong câu update đó.
-- **`archived_at` là cột bắt buộc, không thể thay bằng `updated_at`**: rule retention ở [`domain/video-lifecycle.md`](domain/video-lifecycle.md) tính từ lúc video **chuyển sang ARCHIVED**, trong khi `updated_at` bị đẩy lại mỗi lần Sync Job sửa title/thumbnail. Dùng `updated_at` làm đồng hồ retention thì video ARCHIVED nào bị đổi tiêu đề sẽ không bao giờ đủ hạn để Cleanup Job dọn. Cột này do `Video.Archive()` set, thuộc nhóm thời gian nghiệp vụ (set tường minh), không phải audit.
+- **`archived_at` là cột bắt buộc, không thể thay bằng `updated_at`**: rule retention ở [`domain/video-lifecycle.md`](domain/video-lifecycle.md) tính từ lúc video **chuyển sang ARCHIVED**, trong khi `updated_at` bị đẩy lại mỗi lần Sync Job sửa title/thumbnail. Dùng `updated_at` làm đồng hồ retention thì video ARCHIVED nào bị đổi tiêu đề sẽ không bao giờ đủ hạn để Cleanup Job dọn. Cột này do `VideoStateRules.Archive()` set, thuộc nhóm thời gian nghiệp vụ (set tường minh), không phải audit.
+- **`latest_views/likes/comments` được seed ngay lúc Discovery, không chờ Metrics Update Job**: Discovery chỉ nhận video đã đạt `MinViewsThreshold` ([`domain/discovery-engine.md`](domain/discovery-engine.md)) nên tại thời điểm tạo record nó **đã cầm sẵn** views/likes/comments từ API. Để trống chờ job kế tiếp thì video vừa được nhận *vì* có 100k view lại hiện 0 view trên dashboard. Vẫn chỉ có hai đường ghi và đều ghi đè toàn bộ, không cộng dồn — không có nguy cơ lệch số.
 - **`snapshot_at` và `calculated_at` KHÔNG phải audit field** — chúng là dữ liệu nghiệp vụ (thời điểm đo số liệu / thời điểm tính điểm), phải set tường minh ở chỗ tạo record, không để interceptor điền ngầm.
 - **`DateTimeOffset` cho mọi cột thời gian ở tầng code** (map sang `TIMESTAMPTZ`), không dùng `DateTime` — khớp với `TimeProvider.GetUtcNow()` và không phải đoán `DateTimeKind`.

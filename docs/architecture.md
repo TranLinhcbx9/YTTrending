@@ -87,8 +87,11 @@ Một feature = một folder, chứa Command/Query + Handler + Validator cạnh 
 
 ### YTTrending.Domain
 - Entity thuần + enum. Không attribute EF, không interface repository.
-- **Invariant nằm ở đây**: dùng static factory + private setter thay vì object initializer tự do.
-  - Ví dụ: `Video.Archive()` từ chối chuyển trạng thái nếu đang ARCHIVED (rule terminal-state ở [`domain/video-lifecycle.md`](domain/video-lifecycle.md)) — không để Application tự set `Status = ...`.
+- **Anemic model — entity chỉ chứa property, không method.** Property `{ get; set; }` công khai, tạo bằng object initializer, không static factory.
+  - Field bắt buộc dùng `required` để compiler chặn lúc khởi tạo (CS9035) — thay cho vai trò "tạo xong là đủ field" của factory.
+  - Field có default nghiệp vụ phải khai tường minh: `Channel.IsEnabled = true`, `Video.Status = VideoStatus.New`. Bỏ sót `IsEnabled` là channel vừa add đã tắt tracking mà không báo lỗi.
+- **Invariant KHÔNG nằm ở đây** — chuyển trạng thái video đi qua `Application/Common/VideoStateRules.cs` (rule terminal-state ở [`domain/video-lifecycle.md`](domain/video-lifecycle.md)).
+  - Đây là **quy ước, không phải ràng buộc compiler**: `video.Status = ...` vẫn compile được. Đánh đổi đã biết khi chọn anemic — xem bảng "Đã cân nhắc và bỏ qua".
 
 ### YTTrending.Application
 - Command/Query handler theo từng domain doc:
@@ -129,7 +132,7 @@ public class AddChannelCommandHandler(IAppDbContext db, IYouTubeClient youtube)
         if (info is null)
             return Result<int>.Failure(Error.NotFound("channel.not_found", "Không tìm thấy channel"));
 
-        var channel = Channel.Create(info.Id, info.Name, info.Url);  // invariant check trong Domain
+        var channel = new Channel { YoutubeChannelId = info.Id, Name = info.Name, Url = info.Url };
         db.Channels.Add(channel);
         await db.SaveChangesAsync(ct);
 
@@ -315,6 +318,7 @@ Lưu ý khi quota là mối lo: quota **không** hồi lại khi retry, nên ch�
 |---|---|---|
 | Repository cho từng entity | **Bỏ** | Chỉ có 1 DB, `DbSet` đã là repository — xem mục trên |
 | `TransactionBehavior` | **Bỏ** | 1 `SaveChangesAsync` = 1 transaction, Phase 1 không có handler nào ghi 2 lần |
+| Entity có behavior (static factory + private setter + invariant trong entity) | **Bỏ** (chốt 07/08/2026, sau khi đã làm xong rồi đổi) | Đo thực tế: cả Domain chỉ có **2 câu `if`**, còn 8/15 method là nghi lễ gán thuần quanh `private set`. Đổi sang property bag + `required`; 2 invariant dời sang `VideoStateRules` ở Application. Đánh đổi: rule terminal-state từ ràng buộc compiler thành quy ước, và test chuyển trạng thái từ unit test thành test qua handler |
 | Strongly-typed ID (`VideoId` value object) | **Bỏ (Phase 1)** | Hay để học nhưng kéo theo `HasConversion` ở mọi chỗ; đã có unique index bảo vệ |
 | Domain Events | **Bỏ (Phase 1)** | Chưa có side-effect nào cần tách khỏi luồng chính |
 | MediatR 13+ | **Không nâng** | License thương mại — dừng ở dòng 12.x (Apache-2.0) |

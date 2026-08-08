@@ -14,7 +14,7 @@ Version NuGet khai một chỗ, csproj chỉ ghi tên package. Với dự án n�
 
 ### A2. `Directory.Build.props` — bật `TreatWarningsAsErrors` cho nullable
 
-`Nullable` đã bật nhưng warning vẫn chỉ là warning. Domain dùng private setter + static factory, EF thì cần constructor rỗng — chỗ này rất dễ đẻ ra `null!` rải rác. Bật warning-as-error ngay từ khi repo còn trống thì rẻ; bật sau khi có 50 file thì không ai bật nữa.
+`Nullable` đã bật nhưng warning vẫn chỉ là warning. Navigation property phải khai `= null!` (EF chỉ gán khi `Include`) — chỗ này rất dễ đẻ ra `null!` rải rác. Bật warning-as-error ngay từ khi repo còn trống thì rẻ; bật sau khi có 50 file thì không ai bật nữa.
 
 ### A3. Naming convention snake_case ⚠️
 
@@ -38,14 +38,16 @@ Phải quyết **trước khi tạo migration đầu tiên** — đổi sau ngh�
 |---|---|---|
 | `channels` | `created_at`, `updated_at` | **Audit** — metadata kỹ thuật |
 | `videos` | `created_at`, `updated_at` | **Audit** — metadata kỹ thuật |
-| `videos` | `archived_at` | **Dữ liệu nghiệp vụ** — do `Video.Archive()` set, là đồng hồ đếm retention |
-| `saved_ideas` | `created_at` | Audit, nhưng chỉ 1 nửa |
+| `videos` | `archived_at` | **Dữ liệu nghiệp vụ** — do `VideoStateRules.Archive()` set, là đồng hồ đếm retention |
+| `saved_ideas` | `created_at`, `updated_at` | **Audit** — `note` sửa được (`UpdateNote`) nên `updated_at` mang thông tin thật |
 | `video_metric_snapshots` | `snapshot_at` | **Dữ liệu nghiệp vụ** — là *nội dung* của record |
 | `trending_scores` | `calculated_at` | **Dữ liệu nghiệp vụ** |
 
-Ranh giới cần nhớ: **audit thì tự động, thời gian nghiệp vụ thì set tường minh.** `snapshot_at` trả lời câu hỏi "số liệu này đo lúc nào" — nó là dữ liệu, phải nhìn thấy trong code chỗ tạo snapshot, không được để một interceptor ngầm điền hộ.
+Ranh giới cần nhớ: **audit thì tự động, thời gian nghiệp vụ thì set tường minh.** `snapshot_at` trả lời câu hỏi "số liệu này đo lúc nào" — nó là dữ liệu, có thể lệch thời điểm insert row, nên phải nhìn thấy trong code chỗ tạo snapshot, không được để một interceptor ngầm điền hộ.
 
-Nên chỉ `Channel` và `Video` kế thừa `AuditableEntity`. `SavedIdea` chỉ cần `CreatedAt` → dùng interface `IHasCreatedAt`, hoặc set thẳng trong factory `SavedIdea.Create(...)` (một chỗ duy nhất tạo ra nó, không sợ quên).
+Ngược lại `saved_ideas.created_at` đúng nghĩa là "row này sinh lúc nào" (bookmark = insert, không lệch được), nên để audit điền là chuẩn.
+
+✅ **Đã chốt: `Channel`, `Video`, `SavedIdea` kế thừa `AuditableEntity`.** Không tạo interface `IHasCreatedAt` — thêm một vòng lặp nữa trong `ApplyAuditFields()` để phục vụ đúng 1 entity thì không chặn được lỗi gì, mà `saved_ideas` có `updated_at` là hợp lý sẵn (note sửa được). Hai entity còn lại — `VideoMetricSnapshot`, `TrendingScore` — **không** kế thừa: chúng chỉ mang thời gian nghiệp vụ.
 
 #### (2) Base class + override trong `AppDbContext` (đã chốt: cách A)
 
@@ -338,7 +340,7 @@ FE là project riêng nên mỗi lần đổi hình dạng response là sửa ha
 | AutoMapper | Query đã `Select(v => new Dto(...))` trực tiếp — thêm mapper là thêm một lớp phải debug, và mất luôn khả năng EF dịch projection xuống SQL |
 | Specification pattern | Cùng lý do bỏ Repository — filter cố định, viết thẳng dễ đọc hơn (A17) |
 | Generic `BaseController<T>` / CRUD generic | 3 controller, mỗi cái vài action, chả có gì chung ngoài `ISender` |
-| `BaseEntity<TId>` generic | Khóa toàn `int`, không cần generic hóa. `AuditableEntity` là đủ (A4) |
+| `BaseEntity` gom `Id` + audit (generic hay không) | Khóa **không đồng nhất**, gom lại cũng không dùng được: `video_metric_snapshots.id` là BIGINT còn lại là INT, `trending_scores` lấy luôn `video_id` làm PK nên không có cột `id`. Audit cũng chỉ 2/5 bảng có (A4) → chỉ `Channel` + `Video` vừa, tức là base class cho đúng 2 entity. Giữ `AuditableEntity` đúng tên gọi: tên này chính là bộ lọc của `ChangeTracker.Entries<AuditableEntity>()`, đặt là `BaseEntity` sẽ mời gọi cho cả 5 entity kế thừa rồi audit ngầm chạy lên bảng không có cột |
 | Unit of Work | `SaveChangesAsync` đã là UoW |
 | Caching (IMemoryCache/Redis) | Chưa biết chỗ nào chậm. Thêm cache trước khi đo là tự tạo bug stale data |
 | API versioning | Một client duy nhất do chính mình viết |
@@ -417,23 +419,33 @@ Ghi chú lúc làm:
 
 ### S2. Domain
 
-- [ ] `Enums/VideoStatus.cs` — New / Tracking / Archived
-- [ ] `Common/AuditableEntity.cs` (A4)
-- [ ] `Entities/`: `Channel`, `Video`, `VideoMetricSnapshot`, `TrendingScore`, `SavedIdea`
+- [x] `Enums/VideoStatus.cs` — New / Tracking / Archived
+- [x] `Common/AuditableEntity.cs` (A4)
+- [x] `Entities/`: `Channel`, `Video`, `VideoMetricSnapshot`, `TrendingScore`, `SavedIdea`
 
-Theo đúng [`../docs/database.md`](../docs/database.md). Quy tắc: private setter + static factory `Create(...)`, không object initializer (object initializer **bên trong** static factory thì hợp lệ — private setter đã chặn caller ngoài rồi).
+Theo đúng [`../docs/database.md`](../docs/database.md). Quy tắc: **anemic — entity chỉ có property `{ get; set; }`, không method, không ctor, không static factory.** Tạo bằng object initializer.
 
-`videos` có thêm 3 cột denormalize `latest_views` / `latest_likes` / `latest_comments` (BIGINT) — Metrics Update Job ghi đè mỗi lần sync, dashboard filter/sort theo views không phải join `video_metric_snapshots`. `trending_scores.trending_score` đổi tên cột thành `score` (property Domain là `TrendingScore.Score` — class không được có member trùng tên class, CS0542). Cả hai đã cập nhật ở [`../docs/database.md`](../docs/database.md).
+> ⚠️ Mục này ban đầu làm theo hướng ngược lại (static factory + private setter + invariant trong entity) rồi **đổi sang anemic ngày 07/08/2026**. Số đo lúc quyết định: cả Domain layer chỉ có **2 câu `if`**, 8/15 method là nghi lễ gán thuần quanh `private set`. Lý do đầy đủ + đánh đổi: bảng "Đã cân nhắc và bỏ qua" ở [`../docs/architecture.md`](../docs/architecture.md).
 
-Hai invariant phải nằm ở đây, không để Application tự set:
-- `Video.Archive(now)` — ném lỗi nếu đã ARCHIVED (terminal state), đồng thời set `ArchivedAt`. Không giới hạn trạng thái nguồn — NEW → ARCHIVED thẳng vẫn hợp lệ (xem [`../docs/domain/video-lifecycle.md`](../docs/domain/video-lifecycle.md))
-- `Video.StartTracking()` — chỉ từ NEW
+`videos` có thêm 3 cột denormalize `latest_views` / `latest_likes` / `latest_comments` (BIGINT) — Discovery seed lần đầu rồi Metrics Update Job ghi đè mỗi lần sync, dashboard filter/sort theo views không phải join `video_metric_snapshots`. `trending_scores.trending_score` đổi tên cột thành `score` (property Domain là `TrendingScore.Score` — class không được có member trùng tên class, CS0542). Cả hai đã cập nhật ở [`../docs/database.md`](../docs/database.md).
 
-⚠️ **Nullable + EF Core** (`WarningsAsErrors=nullable` đang bật — A2): private constructor chỉ nhận đúng các property kiểu reference non-nullable, EF Core tự bind theo tên param (camelCase ↔ PascalCase) lúc materialize, phần còn lại EF ghi qua backing field. Entity không có property reference non-nullable nào (`VideoMetricSnapshot`, `TrendingScore`, `SavedIdea`) vẫn phải khai `private Xxx() { }` rỗng **tường minh** — thiếu dòng này C# tự sinh ctor public, phá luôn static factory. Navigation property luôn `= null!` (EF chỉ gán khi `Include`). Nếu EF không bind được ctor có param (chỉ lộ ra lúc build model ở S4, không phải S2): fallback `private Xxx() { }` rỗng + `= null!` trên từng property, sửa ~5 phút.
+**`required` thay vai trò của factory.** Bỏ `Create(...)` là mất bảo đảm "tạo xong là đủ field" — bù bằng `required` trên cột NOT NULL không có default hợp lý, compiler chặn bằng CS9035. Đổi lại được object initializer có tên từng field, không còn bẫy `Video.Create()` 11 tham số vị trí với `views`/`likes`/`comments` cùng kiểu `long` nằm cạnh nhau.
+
+⚠️ **Hai default bắt buộc khai tường minh** — thứ mà factory từng lo hộ:
+- `Channel.IsEnabled { get; set; } = true` — quên là channel vừa add đã bị tắt tracking, job bỏ qua **im lặng**, không có lỗi nào báo.
+- `Video.Status { get; set; } = VideoStatus.New` — hiện `New` tình cờ là giá trị 0 của enum nên quên vẫn đúng, nhưng đừng dựa vào thứ tự enum.
+
+⚠️ **Nullable + EF Core** (`WarningsAsErrors=nullable` đang bật — A2): navigation property luôn `= null!` (EF chỉ gán khi `Include`). Không còn ctor nên hết chuyện EF bind tham số.
+
+Hai invariant **không nằm ở Domain** — chúng ở `Application/Common/VideoStateRules.cs`:
+- `VideoStateRules.Archive(video, now)` — ném lỗi nếu đã ARCHIVED (terminal state), đồng thời set `ArchivedAt`. Không giới hạn trạng thái nguồn — NEW → ARCHIVED thẳng vẫn hợp lệ (xem [`../docs/domain/video-lifecycle.md`](../docs/domain/video-lifecycle.md))
+- `VideoStateRules.StartTracking(video)` — chỉ từ NEW
+
+Đây là **quy ước, không phải ràng buộc compiler**: `video.Status = ...` vẫn compile được. Mọi chỗ đổi trạng thái phải tự đi qua `VideoStateRules` — không có gì nhắc, nên nhớ khi review.
 
 Invariant vi phạm ném `InvalidOperationException`, không tạo `DomainException` riêng — đây là bug gọi sai thứ tự ở Application, không phải lỗi nghiệp vụ dự kiến được nên không đi qua `Result` ([`../docs/architecture.md`](../docs/architecture.md)).
 
-✅ Nghiệm thu: build sạch, không project nào reference vào Domain ngoài Application.
+✅ Nghiệm thu: build sạch, không project nào reference vào Domain ngoài Application. Probe `new Video { Title = "x" }` phải ra CS9035 (chứng minh `required` có hiệu lực).
 
 ---
 

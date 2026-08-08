@@ -26,10 +26,10 @@ Chưa cần: YouTube API thật, job chạy thật, trending score, test project
 
 ## 2. Domain
 
-- [ ] Enum `VideoStatus`
-- [ ] `AuditableEntity` (base class cho `Channel`, `Video`)
-- [ ] 5 entity: `Channel`, `Video`, `VideoMetricSnapshot`, `TrendingScore`, `SavedIdea`
-- [ ] Invariant: `Video.Archive()` chặn terminal-state + set `ArchivedAt`, `Video.StartTracking()` chỉ từ NEW
+- [x] Enum `VideoStatus`
+- [x] `AuditableEntity` (base class cho `Channel`, `Video`)
+- [x] 5 entity: `Channel`, `Video`, `VideoMetricSnapshot`, `TrendingScore`, `SavedIdea`
+- [x] Invariant ở `Application/Common/VideoStateRules.cs` (entity anemic): `Archive()` chặn terminal-state + set `ArchivedAt`, `StartTracking()` chỉ từ NEW
 
 ## 3. Application — khối dùng chung
 

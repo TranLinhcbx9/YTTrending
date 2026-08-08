@@ -11,7 +11,7 @@ TRACKING ─────┘
 
 Video vừa phát hiện, đã đạt `MinViewsThreshold`.
 
-Có thể chuyển thẳng sang ARCHIVED mà **không** qua TRACKING — nếu video rớt khỏi recent list (`RecentShortsLimit`) trước khi kịp `StartTracking()`. `Video.Archive()` chỉ chặn khi đã ARCHIVED (terminal-state), không giới hạn trạng thái nguồn — tránh video kẹt vĩnh viễn ở NEW.
+Có thể chuyển thẳng sang ARCHIVED mà **không** qua TRACKING — nếu video rớt khỏi recent list (`RecentShortsLimit`) trước khi kịp `VideoStateRules.StartTracking()`. `VideoStateRules.Archive()` chỉ chặn khi đã ARCHIVED (terminal-state), không giới hạn trạng thái nguồn — tránh video kẹt vĩnh viễn ở NEW.
 
 ## TRACKING
 
@@ -29,7 +29,7 @@ Ví dụ điều kiện chuyển ARCHIVED:
 - Quá thời gian tracking.
 - Không còn nằm trong danh sách recent.
 
-Rule terminal-state này được enforce ở **domain/application layer**, không dùng DB trigger.
+Rule terminal-state này được enforce ở **Application layer** — `Application/Common/VideoStateRules.cs`, không dùng DB trigger. Entity là anemic (chỉ property) nên đây là **quy ước**: gán thẳng `video.Status = ...` vẫn compile được, mọi chỗ đổi trạng thái phải tự đi qua `VideoStateRules`.
 
 ## Cleanup (Retention)
 
