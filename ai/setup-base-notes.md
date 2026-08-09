@@ -374,6 +374,21 @@ Model bên Angular viết tay, `swagger.json` chỉ dùng để tra cứu. Nghĩ
 
 `/health` endpoint (app chạy local, mở Swagger là biết sống hay chết) · rate limiting · response compression · `AddDbContextPool` · migration bundle · Docker hóa API.
 
+### A26. ⚠️ EF Core convention không tự nhận PK/FK khi entity thiếu navigation property
+
+Phát hiện khi chuẩn bị viết Configuration cho mục 4, trước khi có `AppDbContext` thật — đúng kiểu lỗi chỉ lộ ra lúc bắt tay code, không lộ ra lúc đọc docs.
+
+**a) `TrendingScore` cần `HasKey` tường minh — đã sửa.** Convention của EF Core chỉ tự nhận property tên `Id` hoặc `{TênClass}Id` làm khóa chính. `TrendingScore.VideoId` không khớp pattern nào (tên class là `TrendingScore`, không phải `Video`) — bỏ qua thì `dotnet ef migrations add` chết ngay với lỗi "no key defined".
+
+```csharp
+// Persistence/Configurations/TrendingScoreConfiguration.cs
+builder.HasKey(t => t.VideoId);
+```
+
+**b) `VideoMetricSnapshot` và `TrendingScore` không có navigation property tới `Video`** (đúng theo quyết định "1 chiều từ Video" ở [`../docs/decisions.md`](../docs/decisions.md)) — nghĩa là quan hệ FK cũng **không** tự động được tạo qua convention, `VideoId` sẽ chỉ là cột `int`/`long` trơn, không có ràng buộc khóa ngoại ở DB. **Chưa xử lý** — để dành khi viết `VideoMetricSnapshotConfiguration` và hoàn thiện `TrendingScoreConfiguration`: cần `HasOne(...).WithOne()/.WithMany()...HasForeignKey(...)` tường minh, không dựa vào convention (khác với `Video.Channel` — cái đó có navigation 2 chiều đủ để convention tự nhận).
+
+**c) `Infrastructure.csproj` thiếu `ProjectReference` tới `Application` — đã sửa.** Không phải lỗi EF Core mà là lỗi build cơ bản (`AppDbContext : ..., IAppDbContext` không compile được nếu thiếu), nhưng cùng nhóm "chỉ lộ ra khi thật sự bắt tay code".
+
 ---
 
 ## Phần B — Lệnh chạy & tiêu chí nghiệm thu từng bước
@@ -471,6 +486,7 @@ Invariant vi phạm ném `InvalidOperationException`, không tạo `DomainExcept
   - unique index `youtube_video_id`, `youtube_channel_id`, `saved_ideas.video_id`
   - `HasQueryFilter(v => v.DeletedAt == null)` trên `Video`
   - `Status` → `HasConversion<string>()` (A11)
+  - `TrendingScore` cần `HasKey` + FK tường minh, `VideoMetricSnapshot` cần FK tường minh (A26) — `TrendingScoreConfiguration.cs` đã làm phần `HasKey`
 - [ ] `DependencyInjection.cs` → `AddInfrastructure(config)`: `AddDbContext` + `UseNpgsql` + `UseSnakeCaseNamingConvention()` (A3), bind Options, `AddSingleton(TimeProvider.System)`
 - [ ] Migration `InitialCreate` + auto-migrate lúc startup có cờ `Database:AutoMigrate` (A18)
 
