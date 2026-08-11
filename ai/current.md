@@ -10,17 +10,19 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 |---|---|
 | 1. Nền solution | ✅ Xong |
 | 2. Domain | ✅ Xong |
-| 3. Application — khối dùng chung | ⬜ **Tiếp theo** |
-| 4. Infrastructure — Persistence | ⬜ |
+| 3. Application — khối dùng chung | 🟡 **Tiếp theo** — mới có `IYTTrendingDbContext` + `VideoStateRules` |
+| 4. Infrastructure — Persistence | ✅ Xong |
 | 5. API — wiring | ⬜ |
 | 6. Slice nghiệm thu (`AddChannel`) | ⬜ |
 | 7. Khung background job | ⬜ |
 
 ## Đang làm
 
-- Bước tiếp theo: **mục 3 — Application khối dùng chung**: `Result`/`Error`, `PagedResult`/`PagedQuery`, `QueryableExtensions`, `IAppDbContext`, `IYouTubeClient`, 2 behavior, 3 Options, `AddApplication()`.
+- **Đã làm mục 4 trước mục 3** — cố ý: mục 4 chỉ cần đúng 1 thứ từ mục 3 là `IYTTrendingDbContext` (đã làm sớm), còn `Result`/`Behavior`/`Options` thì persistence không dùng tới. Đi vòng này để chốt được schema + migration sớm, vì `UseSnakeCaseNamingConvention()` **buộc phải có trước migration đầu tiên** (A3) — chậm là phải drop DB làm lại.
+- Bước tiếp theo: **mục 3 — phần còn lại**: `Result`/`Error`, `PagedResult`/`PagedQuery`, `QueryableExtensions`, `IYouTubeClient`, 2 behavior, 3 Options, `AddApplication()`. Xong Options thì quay lại `AddInfrastructure()` bind vào.
 - Chi tiết: [`setup-base-notes.md`](setup-base-notes.md) mục S3 + A14/A15/A17.
-- Khi tạo xong `YTTrending.Application.Common` → mở khoá dòng comment còn lại trong `GlobalUsings.cs` của Application và Infrastructure.
+- Khi tạo xong `YTTrending.Application.Common` → mở khoá dòng comment còn lại trong `GlobalUsings.cs` của Application và API.
+- 2 câu hỏi treo cần chốt trước khi viết `Result`: (1) `Result` và `Result<T>` có chia sẻ `IResult { IsSuccess, Error }` không (ảnh hưởng `LoggingBehavior`/`ResultExtensions` viết 1 lần hay 2 lần)? (2) `.Value` khi `IsSuccess == false` thì trả `default` hay throw (`Result<int>` fail trả `0` — trùng Id hợp lệ)?
 
 ## Block / Cần quyết định
 
@@ -39,7 +41,9 @@ Toàn bộ quyết định setup base đã ghi vào [`../docs/decisions.md`](../
 
 ### Mục 1 — Nền solution ✅
 
-- [x] **DB local** — Postgres 16 (Homebrew) chưa từng `initdb`, đã khởi tạo cluster `/opt/homebrew/var/postgresql@16` + `brew services start postgresql@16`. Có `yttrending_dev` và `yttrending_test`. Auth `trust`, user `linhtran`, port 5432.
+- [x] **DB local** — **Postgres 18.1 trên Windows**, cài ở `C:\Program Files\PostgreSQL\18`. Binary (`psql`, `pg_dump`) **không có trong PATH** — muốn dùng thì thêm cho phiên hiện tại: `$env:PATH += ";C:\Program Files\PostgreSQL\18\bin"`. User `postgres`, port 5432, auth password.
+  - **Không `createdb` tay**: `yttrending_dev` do `dotnet ef database update` tự tạo ở mục 4 (EF nối vào DB `postgres` rồi phát `CREATE DATABASE`). Cần user có quyền `CREATEDB`.
+  - `yttrending_test` **chưa tạo** — Phase 1 hoãn test nên chưa cần.
 - [x] **`Directory.Packages.props`** — Central Package Management, pin toàn bộ version, `MediatR` khoá cứng `12.4.1`, bật `CentralPackageTransitivePinningEnabled`.
 - [x] **`Directory.Build.props`** — `WarningsAsErrors=nullable`, `EnforceCodeStyleInBuild`, gom `TargetFramework` / `Nullable` / `ImplicitUsings` về một chỗ.
 - [x] **`.editorconfig`** — file-scoped namespace + `IFoo` ở mức warning, còn lại suggestion; tắt CA2007 và IDE0058.
@@ -67,4 +71,24 @@ Toàn bộ quyết định setup base đã ghi vào [`../docs/decisions.md`](../
 
 ✅ Nghiệm thu: `dotnet build` → 0 warning / 0 error · grep `Entities/` không còn method/ctor nào · probe object initializer + `VideoStateRules` → compile sạch · probe `new Video { Title = "x" }` → **CS9035** ×9 field bắt buộc, `required` có hiệu lực.
 
-⚠️ **Còn nợ verify sang mục 4:** `required` + EF Core 8 materialization. Về lý thuyết EF ghi qua backing field nên không dính check compile-time, nhưng chỉ chứng minh được khi có `AppDbContext` — chạy `dotnet ef migrations add` + query round-trip. Vỡ thì bỏ `required`, không ảnh hưởng quyết định anemic.
+⚠️ **Còn nợ verify:** `required` + EF Core 8 materialization. Về lý thuyết EF ghi qua backing field nên không dính check compile-time. Mục 4 đã chứng minh được **một nửa**: model build + migration sinh đúng, nhưng chưa có đường ghi/đọc thật nào nên **chưa đóng** — dời mốc sang **mục 6 (`AddChannel`)**: POST qua Swagger → có row trong DB → GET đọc lại được. Vỡ thì bỏ `required`, không ảnh hưởng quyết định anemic.
+
+### Mục 4 — Infrastructure / Persistence ✅
+
+- [x] **`IYTTrendingDbContext`** ở `Application/Common/Interfaces/` — 5 `DbSet<>` (chỉ `{ get; }`) + `SaveChangesAsync`. **Không** expose `DatabaseFacade`: đã bỏ `TransactionBehavior` nên không chỗ nào cần, còn `ExecuteUpdateAsync` của Cleanup Job là extension trên `IQueryable<T>` nên vẫn gọi được.
+- [x] **`Persistence/YTTrendingDbContext.cs`** — primary constructor `(DbContextOptions, TimeProvider clock)`, `ApplyConfigurationsFromAssembly`, override **cả 2** bản `SaveChangesAsync` và `SaveChanges` để audit không bị lọt.
+  - Audit ghi qua `entry.Property(nameof(...)).CurrentValue` vì `CreatedAt`/`UpdatedAt` là `private set` (A4) — đường này ghi thẳng backing field, không cần mở public setter.
+  - Lỗ nhỏ đã biết: bản `SaveChangesAsync(bool, CancellationToken)` không override; interface không expose nên handler không gọi tới được.
+- [x] **5 `IEntityTypeConfiguration`** trong `Persistence/Configurations/` — `HasMaxLength`/`HasPrecision` khai tay theo [`../docs/database.md`](../docs/database.md); `Description`/`Note` cố tình bỏ trống để thành `text`; status `HasConversion<string>()` + `HasMaxLength(16)` (A11); unique index trên `youtube_channel_id`/`youtube_video_id`/`video_id`; `HasQueryFilter` soft-delete cho `Video`; FK khai tay cho `VideoMetricSnapshot` + `TrendingScore` (A26 mục b).
+- [x] **`AddInfrastructure()`** — `AddSingleton(TimeProvider.System)` + `AddDbContext` (`UseNpgsql` + `UseSnakeCaseNamingConvention`) + `AddScoped<IYTTrendingDbContext>` trỏ về cùng instance. **Chưa bind Options** (chờ mục 3).
+- [x] **Migration `InitialCreate`** ở `Persistence/Migrations/`, đã apply. Auto-migrate lúc startup qua cờ `Database:AutoMigrate` (`true` ở Development, `false` ở `appsettings.json`) — dùng `MigrateAsync()`, không `EnsureCreated()` (A18).
+- [x] **Connection string để thẳng `appsettings.Development.json`**, không dùng user-secrets — ngoại lệ có chủ ý so với A7, xem lý do ở đó.
+
+**Vướng khi làm:**
+
+1. **`dotnet-ef` phải cùng dòng version với runtime.** Tool 7.0.10 + runtime EF 8.0.11 → bị từ chối thẳng (*"tools version '7.0.10' is older than that of the runtime"*). Nâng bằng `dotnet tool update --global dotnet-ef --version 8.*`. Đường PMC thì cần thêm package `Microsoft.EntityFrameworkCore.Tools` vào Infrastructure mới có cmdlet `Add-Migration`.
+2. **PMC tự thêm `Microsoft.EntityFrameworkCore.Design` vào API** (startup project bắt buộc phải reference) — nhưng thêm dạng trần, làm rò assembly design-time ra output. Đã khai lại kèm `PrivateAssets=all` cho khớp Infrastructure.
+3. **Migration đầu sinh nhầm tên + nhầm chỗ** (`init_db` ở `Infrastructure/Migrations/`) — đã drop DB, xóa file, sinh lại đúng `InitialCreate` ở `Persistence/Migrations/`. Nội dung migration giống hệt bản cũ, chỉ khác tên class + namespace.
+4. **Warning `PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning`** — do `Video` có query filter còn 3 entity con phụ thuộc bằng FK bắt buộc. Chỉ là log lúc build model, không vỡ build, không cần xử lý.
+
+✅ Nghiệm thu: `dotnet build` → 0 warning / 0 error · migration khớp 7/7 điểm soi so với [`../docs/database.md`](../docs/database.md) (snake_case, `status varchar(16)`, views/likes/comments `bigint`, `trending_scores` PK = `video_id` không có cột `id`, FK của `video_metric_snapshots` + `trending_scores` đều trỏ `videos.id`, `numeric(10,2)`/`(14,2)`/`(5,2)`, không có bảng `app_config`) · `psql \dt` → 5 bảng + `__EFMigrationsHistory` · `dotnet ef migrations has-pending-model-changes` → không lệch model · `dotnet run` → Swagger `HTTP 200` ở `localhost:5118`.

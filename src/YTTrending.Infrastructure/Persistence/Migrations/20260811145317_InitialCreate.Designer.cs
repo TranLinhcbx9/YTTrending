@@ -9,11 +9,11 @@ using YTTrending.Infrastructure.Persistence;
 
 #nullable disable
 
-namespace YTTrending.Infrastructure.Migrations
+namespace YTTrending.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(YTTrendingDbContext))]
-    [Migration("20260811143318_init_db")]
-    partial class init_db
+    [Migration("20260811145317_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

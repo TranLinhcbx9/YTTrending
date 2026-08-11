@@ -36,19 +36,19 @@ Chưa cần: YouTube API thật, job chạy thật, trending score, test project
 - [ ] `Result` / `Result<T>` / `Error` (có `ErrorType` + lỗi nhiều field)
 - [ ] `PagedResult<T>` + `PagedQuery` (có cap page size)
 - [ ] `QueryableExtensions` — `ToPagedResultAsync`, `WhereIf`
-- [ ] `IAppDbContext`
+- [x] `IYTTrendingDbContext` — làm sớm ở mục 4 vì `YTTrendingDbContext` cần implement nó
 - [ ] `IYouTubeClient`
 - [ ] `LoggingBehavior` + `ValidationBehavior`
 - [ ] Options: `TrackingOptions`, `TrendingOptions`, `JobOptions` (validate on start)
 - [ ] `AddApplication()`
 
-## 4. Infrastructure — Persistence
+## 4. Infrastructure — Persistence ✅ XONG
 
-- [ ] `AppDbContext` (kèm audit tự động lúc SaveChanges)
-- [ ] 5 `IEntityTypeConfiguration` — unique index, query filter soft-delete, enum → string
-- [ ] `AddInfrastructure()` — DbContext + snake_case + bind Options + `TimeProvider`
-- [ ] Migration `InitialCreate` + apply
-- [ ] Auto-migrate lúc startup (có cờ bật/tắt)
+- [x] `YTTrendingDbContext` (kèm audit tự động lúc SaveChanges)
+- [x] 5 `IEntityTypeConfiguration` — unique index, query filter soft-delete, enum → string
+- [x] `AddInfrastructure()` — DbContext + snake_case + `TimeProvider` **(chưa bind Options — chờ mục 3)**
+- [x] Migration `InitialCreate` + apply
+- [x] Auto-migrate lúc startup (có cờ bật/tắt)
 
 ## 5. API — wiring
 

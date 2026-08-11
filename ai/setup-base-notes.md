@@ -49,7 +49,7 @@ Ngược lại `saved_ideas.created_at` đúng nghĩa là "row này sinh lúc n�
 
 ✅ **Đã chốt: `Channel`, `Video`, `SavedIdea` kế thừa `AuditableEntity`.** Không tạo interface `IHasCreatedAt` — thêm một vòng lặp nữa trong `ApplyAuditFields()` để phục vụ đúng 1 entity thì không chặn được lỗi gì, mà `saved_ideas` có `updated_at` là hợp lý sẵn (note sửa được). Hai entity còn lại — `VideoMetricSnapshot`, `TrendingScore` — **không** kế thừa: chúng chỉ mang thời gian nghiệp vụ.
 
-#### (2) Base class + override trong `AppDbContext` (đã chốt: cách A)
+#### (2) Base class + override trong `YTTrendingDbContext` (đã chốt: cách A)
 
 ```csharp
 // Domain/Common/AuditableEntity.cs
@@ -63,9 +63,9 @@ public abstract class AuditableEntity
 `private set` để giữ đúng nguyên tắc Domain (không cho object initializer set bừa). Vẫn ghi được, nhưng phải ghi **qua `ChangeTracker` chứ không qua property**:
 
 ```csharp
-// Infrastructure/Persistence/AppDbContext.cs
-public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider clock)
-    : DbContext(options), IAppDbContext
+// Infrastructure/Persistence/YTTrendingDbContext.cs
+public class YTTrendingDbContext(DbContextOptions<YTTrendingDbContext> options, TimeProvider clock)
+    : DbContext(options), IYTTrendingDbContext
 {
     // ... DbSet<T> ...
 
@@ -106,18 +106,18 @@ Không cần gì thêm ngoài việc `TimeProvider` đã có trong DI — EF t�
 
 ```csharp
 services.AddSingleton(TimeProvider.System);
-services.AddDbContext<AppDbContext>(o => o
+services.AddDbContext<YTTrendingDbContext>(o => o
     .UseNpgsql(connectionString)
     .UseSnakeCaseNamingConvention());
 ```
 
-`dotnet ef migrations add` cũng chạy bình thường: nó lấy `AppDbContext` qua service provider của `Program.cs`, mà `TimeProvider` đã đăng ký ở đó.
+`dotnet ef migrations add` cũng chạy bình thường: nó lấy `YTTrendingDbContext` qua service provider của `Program.cs`, mà `TimeProvider` đã đăng ký ở đó.
 
 #### (4) Vì sao override, không dùng `SaveChangesInterceptor`
 
 EF Core có API interception (đăng ký một object vào `DbContextOptions`, EF gọi tại các mốc `SavingChanges` / `SavedChanges` / `SaveChangesFailed`). Nó **không phải** thứ thay thế `ChangeTracker` — interceptor vẫn phải đọc `ChangeTracker` y hệt đoạn trên. Khác biệt duy nhất là đoạn code đó nằm ở file nào.
 
-Chọn override vì đúng nguyên tắc của dự án ([`../docs/architecture.md`](../docs/architecture.md#L7)): *lớp trừu tượng nào không trả lời được "nó chặn được lỗi gì" thì bỏ*. Với **một** DbContext và **một** mối quan tâm lúc save, interceptor không chặn thêm lỗi nào — chỉ thêm 1 file và 2 dòng đăng ký, lại khó tìm hơn (mở `AppDbContext` không thấy audit đâu). Cùng logic đã dùng để bỏ Repository.
+Chọn override vì đúng nguyên tắc của dự án ([`../docs/architecture.md`](../docs/architecture.md#L7)): *lớp trừu tượng nào không trả lời được "nó chặn được lỗi gì" thì bỏ*. Với **một** DbContext và **một** mối quan tâm lúc save, interceptor không chặn thêm lỗi nào — chỉ thêm 1 file và 2 dòng đăng ký, lại khó tìm hơn (mở `YTTrendingDbContext` không thấy audit đâu). Cùng logic đã dùng để bỏ Repository.
 
 **Khi nào cắt sang interceptor:** khi xuất hiện mối quan tâm **thứ hai** lúc save — soft-delete tự động, domain events, outbox. Lúc đó mỗi thứ một class thay vì một method phình dần. Chuyển tốn ~10 phút vì thân hàm bê nguyên; interceptor còn có sẵn hook `SavedChanges`/`SaveChangesFailed` mà override phải tự try-catch.
 
@@ -158,6 +158,8 @@ Giải: `"Jobs": { "Enabled": false }` trong `appsettings.Development.json`, `Ba
 ### A7. Secrets không nằm trong repo
 
 API key YouTube + connection string → `dotnet user-secrets` (đã có sẵn cơ chế, không cần package). `appsettings.json` chỉ giữ placeholder rỗng. Repo là public hay không cũng không nên commit key.
+
+> **Ngoại lệ có chủ ý (mục 4): connection string Development để thẳng trong `appsettings.Development.json`.** DB là Postgres local, password chỉ dùng trên đúng một máy, không mở ra ngoài — mất nó không mất gì. Đánh đổi lấy việc `dotnet ef` / PMC / F5 đều đọc được cùng một chỗ, không phải nhớ `dotnet user-secrets set` mỗi lần clone. `appsettings.json` (bản không-Development) **vẫn** giữ placeholder rỗng. Ngoại lệ này **không áp cho YouTube API key** — key đó có quota và gắn với Google account, vẫn phải đi qua user-secrets ở mục 5.
 
 ### A8. Postgres cài sẵn trên máy — tạo DB riêng cho dự án
 
@@ -316,7 +318,7 @@ Single-user, nên **auto-migrate lúc startup**, nhưng có cờ tắt:
 
 ```csharp
 if (app.Configuration.GetValue<bool>("Database:AutoMigrate"))
-    await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+    await scope.ServiceProvider.GetRequiredService<YTTrendingDbContext>().Database.MigrateAsync();
 ```
 
 Dùng `MigrateAsync()`, **tuyệt đối không `EnsureCreated()`** — `EnsureCreated` tạo schema bỏ qua hệ thống migration, sau đó không migrate tiếp được, phải drop DB làm lại.
@@ -376,7 +378,7 @@ Model bên Angular viết tay, `swagger.json` chỉ dùng để tra cứu. Nghĩ
 
 ### A26. ⚠️ EF Core convention không tự nhận PK/FK khi entity thiếu navigation property
 
-Phát hiện khi chuẩn bị viết Configuration cho mục 4, trước khi có `AppDbContext` thật — đúng kiểu lỗi chỉ lộ ra lúc bắt tay code, không lộ ra lúc đọc docs.
+Phát hiện khi chuẩn bị viết Configuration cho mục 4, trước khi có `YTTrendingDbContext` thật — đúng kiểu lỗi chỉ lộ ra lúc bắt tay code, không lộ ra lúc đọc docs.
 
 **a) `TrendingScore` cần `HasKey` tường minh — đã sửa.** Convention của EF Core chỉ tự nhận property tên `Id` hoặc `{TênClass}Id` làm khóa chính. `TrendingScore.VideoId` không khớp pattern nào (tên class là `TrendingScore`, không phải `Video`) — bỏ qua thì `dotnet ef migrations add` chết ngay với lỗi "no key defined".
 
@@ -385,9 +387,20 @@ Phát hiện khi chuẩn bị viết Configuration cho mục 4, trước khi có
 builder.HasKey(t => t.VideoId);
 ```
 
-**b) `VideoMetricSnapshot` và `TrendingScore` không có navigation property tới `Video`** (đúng theo quyết định "1 chiều từ Video" ở [`../docs/decisions.md`](../docs/decisions.md)) — nghĩa là quan hệ FK cũng **không** tự động được tạo qua convention, `VideoId` sẽ chỉ là cột `int`/`long` trơn, không có ràng buộc khóa ngoại ở DB. **Chưa xử lý** — để dành khi viết `VideoMetricSnapshotConfiguration` và hoàn thiện `TrendingScoreConfiguration`: cần `HasOne(...).WithOne()/.WithMany()...HasForeignKey(...)` tường minh, không dựa vào convention (khác với `Video.Channel` — cái đó có navigation 2 chiều đủ để convention tự nhận).
+**b) `VideoMetricSnapshot` và `TrendingScore` không có navigation property tới `Video`** (đúng theo quyết định "1 chiều từ Video" ở [`../docs/decisions.md`](../docs/decisions.md)) — nghĩa là quan hệ FK cũng **không** tự động được tạo qua convention, `VideoId` sẽ chỉ là cột `int`/`long` trơn, không có ràng buộc khóa ngoại ở DB. **Đã xử lý ở mục 4** — khai `HasOne<Video>()` không tham số (overload không-navigation) rồi nối `.WithMany()` cho snapshot, `.WithOne(v => v.TrendingScore)` cho score, và `HasForeignKey` tường minh. Khác với `Video.Channel` — cái đó có navigation nên convention tự nhận.
 
-**c) `Infrastructure.csproj` thiếu `ProjectReference` tới `Application` — đã sửa.** Không phải lỗi EF Core mà là lỗi build cơ bản (`AppDbContext : ..., IAppDbContext` không compile được nếu thiếu), nhưng cùng nhóm "chỉ lộ ra khi thật sự bắt tay code".
+```csharp
+// VideoMetricSnapshotConfiguration — 1-nhiều, HasForeignKey không cần tham số kiểu
+builder.HasOne<Video>().WithMany().HasForeignKey(s => s.VideoId);
+
+// TrendingScoreConfiguration — 1-1, HasForeignKey<T> BẮT BUỘC có tham số kiểu
+// để chỉ rõ bên nào là dependent
+builder.HasOne<Video>().WithOne(v => v.TrendingScore).HasForeignKey<TrendingScore>(t => t.VideoId);
+```
+
+Đã nghiệm thu bằng `psql \d`: cả `fk_video_metric_snapshots_videos_video_id` lẫn `fk_trending_scores_videos_video_id` đều có thật trong DB. Đây là điểm dễ mất nhất của mục 4 — sai thì migration vẫn chạy ngon, chỉ là cột `int` trơn không ai chặn.
+
+**c) `Infrastructure.csproj` thiếu `ProjectReference` tới `Application` — đã sửa.** Không phải lỗi EF Core mà là lỗi build cơ bản (`YTTrendingDbContext : ..., IYTTrendingDbContext` không compile được nếu thiếu), nhưng cùng nhóm "chỉ lộ ra khi thật sự bắt tay code".
 
 ---
 
@@ -469,7 +482,7 @@ Invariant vi phạm ném `InvalidOperationException`, không tạo `DomainExcept
 - [ ] `Common/Result.cs`, `Common/Error.cs` — bản đầy đủ: thêm `Result` không generic + `Error.Fields` + implicit conversion (A15)
 - [ ] `Common/Models/PagedResult.cs`, `Common/Models/PagedQuery.cs` (A14)
 - [ ] `Common/Extensions/QueryableExtensions.cs` — `ToPagedResultAsync`, `WhereIf` (A14, A17)
-- [ ] `Common/Interfaces/IAppDbContext.cs` — 5 `DbSet<T>` + `SaveChangesAsync`
+- [ ] `Common/Interfaces/IYTTrendingDbContext.cs` — 5 `DbSet<T>` + `SaveChangesAsync`
 - [ ] `Common/Interfaces/IYouTubeClient.cs` — `GetChannelAsync`, `GetRecentShortsAsync`, `GetVideoStatsAsync` (ký chữ tạm, sửa khi làm Discovery)
 - [ ] `Common/Behaviors/`: `LoggingBehavior`, `ValidationBehavior` (gom lỗi vào `Error.Fields`)
 - [ ] `Common/Options/`: `TrackingOptions`, `TrendingOptions`, `JobOptions` — kèm DataAnnotations (`[Range]`) để `ValidateOnStart` bắt được
@@ -479,28 +492,37 @@ Invariant vi phạm ném `InvalidOperationException`, không tạo `DomainExcept
 
 ---
 
-### S4. Infrastructure — Persistence
+### S4. Infrastructure — Persistence ✅ ĐÃ LÀM
 
-- [ ] `Persistence/AppDbContext.cs` : `DbContext, IAppDbContext` + inject `TimeProvider` + override `SaveChanges`/`SaveChangesAsync` cho audit (A4)
-- [ ] `Persistence/Configurations/` — 5 file `IEntityTypeConfiguration<T>`
+- [x] `Persistence/YTTrendingDbContext.cs` : `DbContext, IYTTrendingDbContext` + inject `TimeProvider` + override `SaveChanges`/`SaveChangesAsync` cho audit (A4)
+- [x] `Persistence/Configurations/` — 5 file `IEntityTypeConfiguration<T>`
   - unique index `youtube_video_id`, `youtube_channel_id`, `saved_ideas.video_id`
   - `HasQueryFilter(v => v.DeletedAt == null)` trên `Video`
   - `Status` → `HasConversion<string>()` (A11)
-  - `TrendingScore` cần `HasKey` + FK tường minh, `VideoMetricSnapshot` cần FK tường minh (A26) — `TrendingScoreConfiguration.cs` đã làm phần `HasKey`
-- [ ] `DependencyInjection.cs` → `AddInfrastructure(config)`: `AddDbContext` + `UseNpgsql` + `UseSnakeCaseNamingConvention()` (A3), bind Options, `AddSingleton(TimeProvider.System)`
-- [ ] Migration `InitialCreate` + auto-migrate lúc startup có cờ `Database:AutoMigrate` (A18)
+  - `TrendingScore` cần `HasKey` + FK tường minh, `VideoMetricSnapshot` cần FK tường minh (A26)
+  - **`HasMaxLength` / `HasPrecision` phải khai tay theo [`../docs/database.md`](../docs/database.md)** — không khai thì Npgsql map mọi `string` thành `text` (chạy được nhưng lệch schema đã chốt), còn `decimal` không khai `HasPrecision` thì EF cảnh báo *"No store type was specified for the decimal property"*. Cột nào cố tình muốn `text` (`Description`, `Note`) thì bỏ trống **và ghi comment nói rõ là cố ý**, không thì lần sau đọc lại tưởng quên.
+  - Không khai `OnDelete`: mặc định của EF cho FK bắt buộc đã là `Cascade`, đúng ý. `required` trên entity tự thành `NOT NULL`, không cần `IsRequired()`.
+- [x] `DependencyInjection.cs` → `AddInfrastructure(config)`: `AddDbContext` + `UseNpgsql` + `UseSnakeCaseNamingConvention()` (A3), `AddSingleton(TimeProvider.System)`, `AddScoped<IYTTrendingDbContext>` trỏ về cùng instance — **bind Options còn nợ**, chờ mục 3 có Options class.
+- [x] Migration `InitialCreate` + auto-migrate lúc startup có cờ `Database:AutoMigrate` (A18)
 
 ```bash
-dotnet tool install --global dotnet-ef
 dotnet ef migrations add InitialCreate \
   -p src/YTTrending.Infrastructure -s src/YTTrending.API \
   -o Persistence/Migrations
 dotnet ef database update -p src/YTTrending.Infrastructure -s src/YTTrending.API
 ```
 
-⚠️ Mở file migration sinh ra **đọc trước khi apply** — kiểm tra tên cột đã snake_case chưa, `status` là `text` chưa, `views/likes/comments` là `bigint` chưa.
+⚠️ **`dotnet-ef` phải cùng dòng version với runtime EF Core.** Tool global 7.0.10 + runtime 8.0.11 → EF từ chối chạy: *"The Entity Framework tools version '7.0.10' is older than that of the runtime '8.0.11'."* Nâng bằng `dotnet tool update --global dotnet-ef --version 8.*` rồi `dotnet ef --version` kiểm lại. Cùng bẫy này lặp lại mỗi lần nâng EF Core.
 
-✅ Nghiệm thu: 5 bảng trong Postgres, tên cột đúng như [`../docs/database.md`](../docs/database.md).
+⚠️ Đi đường Package Manager Console thì cần thêm package `Microsoft.EntityFrameworkCore.Tools` vào Infrastructure mới có cmdlet `Add-Migration`. PMC cũng **tự thêm `Microsoft.EntityFrameworkCore.Design` vào startup project (API)** dạng trần — phải khai lại kèm `PrivateAssets=all` + `IncludeAssets` cho khớp Infrastructure, không thì rò assembly design-time ra output.
+
+⚠️ **`-o Persistence/Migrations` đừng bỏ sót**, và tên migration theo A18 (động từ + đối tượng, PascalCase). Thiếu `-o` là migration rơi vào `Infrastructure/Migrations/`, lệch cấu trúc ở [`../docs/architecture.md`](../docs/architecture.md) — sửa sau thì phải drop DB sinh lại vì `migration_id` nằm trong `__EFMigrationsHistory`.
+
+⚠️ Mở file migration sinh ra **đọc trước khi apply** — tên cột đã snake_case chưa, `status` là `character varying(16)` chưa (không phải enum native), `views/likes/comments` là `bigint` chưa, `trending_scores` PK có đúng là `video_id` và **không** có cột `id` chưa, FK của `video_metric_snapshots` + `trending_scores` có thật chưa (A26).
+
+ℹ️ EF sẽ log `PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning` — do `Video` có query filter soft-delete còn 3 entity con phụ thuộc bằng FK bắt buộc. Chỉ là nhắc nhở, không vỡ build (`WarningsAsErrors=nullable` chỉ áp cho nullable của C#).
+
+✅ Nghiệm thu: 5 bảng trong Postgres, tên cột đúng như [`../docs/database.md`](../docs/database.md) · `dotnet ef migrations has-pending-model-changes` báo không lệch. **Không** dùng `EnsureCreated()` để tạo schema — nó bỏ qua hệ thống migration, sau đó không migrate tiếp được.
 
 ---
 

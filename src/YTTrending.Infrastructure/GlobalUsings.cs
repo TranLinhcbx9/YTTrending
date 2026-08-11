@@ -6,4 +6,4 @@ global using Microsoft.Extensions.DependencyInjection;
 global using YTTrending.Domain.Common;
 global using YTTrending.Domain.Entities;
 
- global using YTTrending.Application.Common.Interfaces;
+global using YTTrending.Application.Common.Interfaces;

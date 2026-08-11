@@ -17,7 +17,7 @@
 
 - **Runtime .NET 8 (LTS)**: giữ .NET 8 cho Phase 1 dù hết support 10/11/2026 — nâng lên .NET 10 tính ở Phase 2, không phải việc chặn Phase 1.
 - **MediatR dừng ở dòng 12.x**: MediatR 13+ đã chuyển sang license thương mại. Dùng 12.x (Apache-2.0), không nâng major.
-- **Bỏ toàn bộ Repository pattern**: không có `IChannelRepository`/`IVideoRepository`/`IMetricsSnapshotRepository`/`ISavedIdeaRepository`. Command lẫn Query đều dùng `IAppDbContext` trực tiếp — chỉ có 1 DB duy nhất nên lớp bọc thêm không chặn được lỗi gì. Interface ra ngoài chỉ còn 2: `IAppDbContext`, `IYouTubeClient`.
+- **Bỏ toàn bộ Repository pattern**: không có `IChannelRepository`/`IVideoRepository`/`IMetricsSnapshotRepository`/`ISavedIdeaRepository`. Command lẫn Query đều dùng `IYTTrendingDbContext` trực tiếp — chỉ có 1 DB duy nhất nên lớp bọc thêm không chặn được lỗi gì. Interface ra ngoài chỉ còn 2: `IYTTrendingDbContext`, `IYouTubeClient`.
 - **Background job hosting**: chốt `BackgroundService` + `PeriodicTimer` built-in .NET, không dùng Hangfire/Quartz. Job chỉ đóng vai cái đồng hồ, logic nằm trong Command ở Application.
 - **Result pattern thay exception cho lỗi nghiệp vụ**: `Error` mang `ErrorType` (Validation/NotFound/Conflict) để API map HTTP status ở một chỗ duy nhất. Exception chỉ dành cho lỗi hạ tầng.
 - **Bỏ `TransactionBehavior`**: một `SaveChangesAsync` đã là một transaction; Phase 1 không có handler nào ghi 2 lần.
@@ -26,15 +26,15 @@
 
 ### Setup base (chốt 05/08/2026 — xem [`../ai/setup-base.md`](../ai/setup-base.md))
 
-- **Config đọc từ `appsettings.json` + Options pattern** *(đóng pending #3)*: bind qua `ValidateOnStart`, handler dùng `IOptionsMonitor`. Bảng `app_config` **không tạo** trong migration đầu tiên — để dành Phase 2 khi có UI sửa config runtime. Secrets (connection string, YouTube API key) nằm trong `dotnet user-secrets`.
-- **DB local: Postgres cài sẵn trên máy**, database riêng `yttrending_dev` — không dùng Docker.
+- **Config đọc từ `appsettings.json` + Options pattern** *(đóng pending #3)*: bind qua `ValidateOnStart`, handler dùng `IOptionsMonitor`. Bảng `app_config` **không tạo** trong migration đầu tiên — để dành Phase 2 khi có UI sửa config runtime. Secrets nằm trong `dotnet user-secrets` — **trừ connection string Development**, xem ngoại lệ ở mục 4 dưới.
+- **DB local: Postgres cài sẵn trên máy**, database riêng `yttrending_dev` — không dùng Docker. Database **không tạo tay**: `dotnet ef database update` tự `CREATE DATABASE` nếu chưa có.
 - **`videos.status` lưu VARCHAR + `HasConversion<string>()`**, không dùng native Postgres ENUM: tránh phải viết `ALTER TYPE` thủ công mỗi lần thêm trạng thái, và giữ schema tạo được trên Sqlite.
 - **Tên bảng/cột `snake_case`** qua `EFCore.NamingConventions` — phải bật trước migration đầu tiên.
 - **Logging: Serilog + file sink**, rolling theo ngày, giữ 7 ngày — vì job chạy đêm cần đọc lại log vào sáng hôm sau.
 - **Frontend: Angular 20+, để ở repo riêng.** Backend chỉ là API thuần, không host static file, không có project FE trong solution. Kéo theo: API phải bật CORS, và hợp đồng JSON (camelCase, enum trả string, list bọc `PagedResult`, lỗi cùng một hình dạng) phải giữ ổn định vì đổi là sửa cả hai repo.
 - **`swagger.json` chỉ dùng để tham chiếu**, không sinh TypeScript client tự động — model bên Angular viết tay. Đổi lại phải kỷ luật: đổi shape DTO ở BE thì tự nhớ sửa interface bên FE, compiler không báo giúp.
 - **Test hoãn sang phase sau**: base không tạo test project. Vẫn giữ `IYouTubeClient` và `TimeProvider` vì đó là thiết kế (chạy được `FakeYouTubeClient`, tua được thời gian khi debug), không phải công việc viết test.
-- **Audit `created_at`/`updated_at` làm bằng override `SaveChanges` trong `AppDbContext`**, không dùng `SaveChangesInterceptor`: chỉ có 1 DbContext và 1 mối quan tâm lúc save, interceptor không chặn thêm lỗi nào mà lại khó tìm hơn (cùng lý do đã bỏ Repository). Cắt sang interceptor khi xuất hiện mối quan tâm thứ hai — soft-delete tự động, domain events, outbox.
+- **Audit `created_at`/`updated_at` làm bằng override `SaveChanges` trong `YTTrendingDbContext`**, không dùng `SaveChangesInterceptor`: chỉ có 1 DbContext và 1 mối quan tâm lúc save, interceptor không chặn thêm lỗi nào mà lại khó tìm hơn (cùng lý do đã bỏ Repository). Cắt sang interceptor khi xuất hiện mối quan tâm thứ hai — soft-delete tự động, domain events, outbox.
 - **Không đưa vào base**: Repository/Specification, AutoMapper, `BaseController<T>` generic, Unit of Work, caching, API versioning, health check, rate limiting, Docker hóa API.
 
 ### Domain — mục 2 (chốt 05/08/2026)
@@ -46,6 +46,16 @@
 - **`SavedIdea` kế thừa `AuditableEntity`** (chốt lại 07/08/2026, thay cho phương án `IHasCreatedAt`) — bảng `saved_ideas` vì thế có thêm cột `updated_at`. Hợp lý vì `note` sửa được, và `created_at` ở đây đúng nghĩa "row sinh lúc nào" (bookmark = insert, không lệch được) nên để audit điền là chuẩn — khác `snapshot_at`/`calculated_at`.
 - **Invariant vi phạm ném `InvalidOperationException`**, không tạo `DomainException` riêng: chuyển trạng thái sai là bug gọi sai thứ tự ở Application, không phải lỗi nghiệp vụ dự kiến được nên không đi qua `Result`. Tách exception riêng khi nào có chỗ cần catch phân biệt.
 - **Entity là anemic — chỉ property, không method** (chốt 07/08/2026, sau khi đã làm xong theo hướng ngược lại). Đo lúc quyết định: cả Domain chỉ có 2 câu `if`, 8/15 method là nghi lễ gán thuần quanh `private set`. `required` thay vai trò "tạo xong là đủ field" của static factory; 2 invariant dời sang `Application/Common/VideoStateRules.cs`. **Đánh đổi đã biết:** rule terminal-state từ ràng buộc compiler thành quy ước (`video.Status = ...` compile được), test chuyển trạng thái từ unit test thuần thành test qua handler. Đổi lúc Application còn trống nên không phải sửa call site nào.
+
+### Infrastructure / Persistence — mục 4 (chốt 11/08/2026)
+
+- **Tên `YTTrendingDbContext` / `IYTTrendingDbContext`**, không phải `AppDbContext` / `IAppDbContext` như bản docs trước. Solution chỉ có đúng một DbContext nên "App" không phân biệt được gì; tên mang prefix dự án đọc log/stack trace là biết ngay của ai. Toàn bộ docs đã đổi theo.
+- **Connection string Development để thẳng trong `appsettings.Development.json`**, không qua user-secrets — ngoại lệ có chủ ý so với A7 ([`../ai/setup-base-notes.md`](../ai/setup-base-notes.md)). DB là Postgres local, password chỉ có giá trị trên đúng một máy; đổi lấy việc `dotnet ef` / PMC / F5 đọc cùng một chỗ. **YouTube API key vẫn đi user-secrets** — key đó có quota và gắn với Google account.
+- **Identity là `GENERATED BY DEFAULT AS IDENTITY`** (mặc định Npgsql), không phải `ALWAYS`: vẫn insert `id` tường minh được khi cần seed data / import lại, `ALWAYS` thì phải `OVERRIDING SYSTEM VALUE`. [`database.md`](database.md) đã sửa.
+- **FK khai tay cho `VideoMetricSnapshot` và `TrendingScore`**: hai entity này không có navigation property ở cả hai chiều (hệ quả của quyết định "navigation 1 chiều từ `Video`") nên convention EF **không** tự sinh FK — bỏ qua thì `video_id` chỉ là cột `int` trơn, migration vẫn chạy ngon mà DB không ai chặn. Chi tiết A26.
+- **Migration nằm ở `Infrastructure/Persistence/Migrations/`**, tên theo động từ + đối tượng PascalCase (A18) — `InitialCreate`, không phải `init_db`. Sửa sau khi đã apply thì phải drop DB làm lại vì `migration_id` đã ghi vào `__EFMigrationsHistory`.
+- **`Microsoft.EntityFrameworkCore.Design` ở API khai kèm `PrivateAssets=all`**: startup project bắt buộc phải reference package này cho `dotnet ef`/PMC hoạt động, nhưng đây là dependency design-time — để trần là rò assembly ra output.
+- **Chưa bind Options trong `AddInfrastructure()`** — nợ lại tới khi mục 3 tạo xong `TrackingOptions`/`TrendingOptions`/`JobOptions`.
 
 ## Pending (chưa chốt)
 

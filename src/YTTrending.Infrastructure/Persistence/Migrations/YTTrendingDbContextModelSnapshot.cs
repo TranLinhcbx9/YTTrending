@@ -8,7 +8,7 @@ using YTTrending.Infrastructure.Persistence;
 
 #nullable disable
 
-namespace YTTrending.Infrastructure.Migrations
+namespace YTTrending.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(YTTrendingDbContext))]
     partial class YTTrendingDbContextModelSnapshot : ModelSnapshot

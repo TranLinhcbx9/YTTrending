@@ -25,7 +25,7 @@ YTTrending.API             → Composition root: Controllers, DI wiring, appsett
       ↓
 YTTrending.Infrastructure  → EF Core DbContext, YouTube API client, Background Jobs
       ↓
-YTTrending.Application     → Command/Query handler, interface (IAppDbContext, IYouTubeClient), Options
+YTTrending.Application     → Command/Query handler, interface (IYTTrendingDbContext, IYouTubeClient), Options
       ↓
 YTTrending.Domain          → Entities, Enums, invariant — không phụ thuộc project nào khác
 ```
@@ -39,9 +39,9 @@ YTTrending.Domain          → Entities, Enums, invariant — không phụ thu�
 | **Infrastructure** | Application | EF Core + Npgsql, Http.Resilience, Hosting | (không cấm gì đặc biệt) |
 | **API** | Application **+ Infrastructure** | ASP.NET, Swashbuckle | `using` DbContext / entity EF trong Controller |
 
-> **Vì sao API vẫn reference Infrastructure?** Vì API là composition root — không thể gọi `services.AddInfrastructure()` mà không "thấy" project đó. Ranh giới thật nằm ở chỗ: **Controller chỉ được biết `ISender` và DTO**, tuyệt đối không chạm `AppDbContext`. Đây là quy ước, compiler không chặn được.
+> **Vì sao API vẫn reference Infrastructure?** Vì API là composition root — không thể gọi `services.AddInfrastructure()` mà không "thấy" project đó. Ranh giới thật nằm ở chỗ: **Controller chỉ được biết `ISender` và DTO**, tuyệt đối không chạm `YTTrendingDbContext`. Đây là quy ước, compiler không chặn được.
 
-> **Application vẫn phụ thuộc EF Core — và điều đó ổn.** `IAppDbContext` expose `DbSet<T>`, còn `FirstOrDefaultAsync`/`AsNoTracking` là extension của EF. Nói "Application không biết EF" là tự lừa mình. Ranh giới thật là **provider**: đổi Postgres → SQL Server chỉ động vào Infrastructure.
+> **Application vẫn phụ thuộc EF Core — và điều đó ổn.** `IYTTrendingDbContext` expose `DbSet<T>`, còn `FirstOrDefaultAsync`/`AsNoTracking` là extension của EF. Nói "Application không biết EF" là tự lừa mình. Ranh giới thật là **provider**: đổi Postgres → SQL Server chỉ động vào Infrastructure.
 
 ## Cấu trúc thư mục
 
@@ -53,7 +53,7 @@ src/
 │
 ├── YTTrending.Application/
 │   ├── Common/
-│   │   ├── Interfaces/     IAppDbContext, IYouTubeClient
+│   │   ├── Interfaces/     IYTTrendingDbContext, IYouTubeClient
 │   │   ├── Behaviors/      LoggingBehavior, ValidationBehavior
 │   │   ├── Options/        TrackingOptions, TrendingOptions
 │   │   └── Result.cs, Error.cs
@@ -65,7 +65,7 @@ src/
 │
 ├── YTTrending.Infrastructure/
 │   ├── Persistence/
-│   │   ├── AppDbContext.cs
+│   │   ├── YTTrendingDbContext.cs
 │   │   ├── Configurations/     IEntityTypeConfiguration<T>
 │   │   └── Migrations/
 │   ├── YouTube/                YouTubeClient (typed HttpClient)
@@ -98,11 +98,11 @@ Một feature = một folder, chứa Command/Query + Handler + Validator cạnh 
   - Discovery Engine — [`domain/discovery-engine.md`](domain/discovery-engine.md)
   - Trending Engine — [`domain/trending-engine.md`](domain/trending-engine.md)
   - Job orchestration — [`domain/background-jobs.md`](domain/background-jobs.md)
-- Khai báo interface ra ngoài: **chỉ 2 cái** — `IAppDbContext`, `IYouTubeClient`.
+- Khai báo interface ra ngoài: **chỉ 2 cái** — `IYTTrendingDbContext`, `IYouTubeClient`.
 - Bind + validate Options — xem [`config.md`](config.md).
 
 ### YTTrending.Infrastructure
-- `AppDbContext : DbContext, IAppDbContext` + Fluent API configurations + migrations.
+- `YTTrendingDbContext : DbContext, IYTTrendingDbContext` + Fluent API configurations + migrations.
 - `YouTubeClient` (typed `HttpClient` + resilience handler).
 - 3 `BackgroundService` cho Sync / Metrics / Cleanup.
 - `DependencyInjection.cs`: một extension `AddInfrastructure(config)` gom toàn bộ đăng ký.
@@ -118,7 +118,7 @@ Một feature = một folder, chứa Command/Query + Handler + Validator cạnh 
 ```csharp
 public record AddChannelCommand(string YoutubeChannelId) : IRequest<Result<int>>;
 
-public class AddChannelCommandHandler(IAppDbContext db, IYouTubeClient youtube)
+public class AddChannelCommandHandler(IYTTrendingDbContext db, IYouTubeClient youtube)
     : IRequestHandler<AddChannelCommand, Result<int>>
 {
     public async Task<Result<int>> Handle(AddChannelCommand request, CancellationToken ct)
@@ -146,7 +146,7 @@ public class AddChannelCommandHandler(IAppDbContext db, IYouTubeClient youtube)
 ```csharp
 public record GetDashboardQuery(int? ChannelId, decimal? MinScore) : IRequest<Result<List<VideoListItemDto>>>;
 
-public class GetDashboardQueryHandler(IAppDbContext db)
+public class GetDashboardQueryHandler(IYTTrendingDbContext db)
     : IRequestHandler<GetDashboardQuery, Result<List<VideoListItemDto>>>
 {
     public async Task<Result<List<VideoListItemDto>>> Handle(GetDashboardQuery q, CancellationToken ct)
@@ -240,9 +240,11 @@ public class VideoConfiguration : IEntityTypeConfiguration<Video>
 }
 ```
 
-Hai điểm đáng chú ý:
+Bốn điểm đáng chú ý:
 - `HasQueryFilter` cho soft-delete → không phải nhớ `.Where(v => v.DeletedAt == null)` ở mọi query (khi cần xem cả bản đã xóa thì `.IgnoreQueryFilters()`).
 - Cleanup Job soft-delete hàng loạt bằng `ExecuteUpdateAsync` — một câu UPDATE, không load entity lên memory.
+- `HasMaxLength`/`HasPrecision` **phải khai tay** theo [`database.md`](database.md): không khai thì mọi `string` thành `text`, và `decimal` bị EF cảnh báo thiếu store type.
+- **FK phải khai tay cho `VideoMetricSnapshot` và `TrendingScore`.** Hệ quả trực tiếp của "navigation 1 chiều từ `Video`": không có navigation ở cả hai chiều thì convention EF không nhận ra đây là quan hệ, `video_id` chỉ còn là cột `int` trơn không có ràng buộc.
 
 ## Background Job Hosting
 
