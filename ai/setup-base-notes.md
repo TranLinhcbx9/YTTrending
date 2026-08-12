@@ -242,9 +242,9 @@ Ba lưu ý:
 - `.Skip()` **bắt buộc phải có `OrderBy` đứng trước**, nếu không Postgres trả thứ tự không xác định và trang 2 lặp lại item của trang 1. Đây là bug kinh điển của offset paging.
 - Offset paging là đủ ở quy mô này. Keyset/cursor chỉ đáng làm khi bảng lên hàng triệu dòng — không phải Phase 1.
 
-### A15. Result pattern — bản trong docs còn thiếu 2 thứ ⚠️
+### A15. Result pattern — bản đầy đủ ✅ (code xong ở Batch 1, 12/08/2026)
 
-[`../docs/architecture.md`](../docs/architecture.md#L172) mới có `Result<T>`. Thực tế cần thêm:
+Sketch ban đầu ở [`../docs/architecture.md`](../docs/architecture.md#L172) mới có `Result<T>`; **nay đã cập nhật khớp code thật** ở `Application/Common/Error.cs` + `Result.cs`. Ba điểm bổ sung so với sketch đó:
 
 **(1) `Result` không generic** — cho command không trả gì (`ToggleChannel`, `DeleteSavedIdea`). Không có thì phải viết `Result<bool>` hoặc `Result<Unit>` khắp nơi, xấu và vô nghĩa.
 
@@ -261,7 +261,7 @@ public record Error(string Code, ErrorType Type, string Message)
 }
 ```
 
-Ngoài ra thêm implicit conversion `Result<T>.Success` để handler viết `return channel.Id;` thay vì `return Result<int>.Success(channel.Id);` — nhỏ nhưng dùng ở mọi handler.
+**(3) Implicit conversion — đã cân nhắc rồi BỎ.** Bản đầu định thêm `implicit operator Result<T>(T)` để handler viết `return channel.Id;` thay vì `return Result<int>.Success(channel.Id);`. Bỏ vì mất khả năng đọc/grep: dòng `return channel.Id;` không có chữ nào cho biết đang tạo `Result<int>`, và text-search không tìm ra chỗ construct. Handler luôn gọi tường minh `Result<T>.Success(...)`/`Failure(...)`. Xem [`../docs/decisions.md`](../docs/decisions.md) mục *Application — mục 3, Batch 1*.
 
 ### A16. Middleware / pipeline — cần đúng 4 thứ
 

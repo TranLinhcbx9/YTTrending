@@ -10,7 +10,7 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 |---|---|
 | 1. Nền solution | ✅ Xong |
 | 2. Domain | ✅ Xong |
-| 3. Application — khối dùng chung | 🟡 **Tiếp theo** — mới có `IYTTrendingDbContext` + `VideoStateRules` |
+| 3. Application — khối dùng chung | 🟡 **Đang làm** — Batch 1/6 xong (`Error` + `Result`), tiếp theo Batch 3 (Options) |
 | 4. Infrastructure — Persistence | ✅ Xong |
 | 5. API — wiring | ⬜ |
 | 6. Slice nghiệm thu (`AddChannel`) | ⬜ |
@@ -19,10 +19,11 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 ## Đang làm
 
 - **Đã làm mục 4 trước mục 3** — cố ý: mục 4 chỉ cần đúng 1 thứ từ mục 3 là `IYTTrendingDbContext` (đã làm sớm), còn `Result`/`Behavior`/`Options` thì persistence không dùng tới. Đi vòng này để chốt được schema + migration sớm, vì `UseSnakeCaseNamingConvention()` **buộc phải có trước migration đầu tiên** (A3) — chậm là phải drop DB làm lại.
-- Bước tiếp theo: **mục 3 — phần còn lại**: `Result`/`Error`, `PagedResult`/`PagedQuery`, `QueryableExtensions`, `IYouTubeClient`, 2 behavior, 3 Options, `AddApplication()`. Xong Options thì quay lại `AddInfrastructure()` bind vào.
+- **Mục 3 chia 6 batch**, thứ tự chạy đã chốt: **1 → 3 → 2 → 4 → 5 → 6**. Batch 1 đi đầu vì là chỗ duy nhất còn quyết định thiết kế; các batch sau chủ yếu chép từ code mẫu A14/A17/S3.
+- **Batch 1 xong (12/08/2026)** — `Common/Error.cs` + `Common/Result.cs`. 2 câu hỏi treo trước đây (`IResult`? `.Value` khi fail?) **đã chốt**, cùng với quyết định thứ 3 phát sinh khi làm (bỏ implicit conversion) — cả 3 ghi ở [`../docs/decisions.md`](../docs/decisions.md) mục *Application — mục 3, Batch 1*.
+- Bước tiếp theo: **Batch 3 — 3 Options** (`TrackingOptions`/`TrendingOptions`/`JobOptions`), rồi Batch 2 (`PagedResult`/`PagedQuery`/`QueryableExtensions`), 4 (`IYouTubeClient`), 5 (2 behavior), 6 (`AddApplication()`). Xong Options thì quay lại `AddInfrastructure()` bind vào.
 - Chi tiết: [`setup-base-notes.md`](setup-base-notes.md) mục S3 + A14/A15/A17.
-- Khi tạo xong `YTTrending.Application.Common` → mở khoá dòng comment còn lại trong `GlobalUsings.cs` của Application và API.
-- 2 câu hỏi treo cần chốt trước khi viết `Result`: (1) `Result` và `Result<T>` có chia sẻ `IResult { IsSuccess, Error }` không (ảnh hưởng `LoggingBehavior`/`ResultExtensions` viết 1 lần hay 2 lần)? (2) `.Value` khi `IsSuccess == false` thì trả `default` hay throw (`Result<int>` fail trả `0` — trùng Id hợp lệ)?
+- `GlobalUsings.cs` của **Application đã mở khoá** dòng `YTTrending.Application.Common`; bên **API vẫn để comment** — chờ Batch 6 và mục 5 (`YTTrending.API.Common` chưa tồn tại).
 
 ## Block / Cần quyết định
 

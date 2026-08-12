@@ -181,21 +181,52 @@ public enum ErrorType { Validation, NotFound, Conflict }
 
 public record Error(string Code, ErrorType Type, string Message)
 {
+    // Lỗi nhiều field từ FluentValidation: key = tên field, value = các message của field đó
+    public IReadOnlyDictionary<string, string[]>? Fields { get; init; }
+
     public static Error NotFound(string code, string msg) => new(code, ErrorType.NotFound, msg);
     public static Error Conflict(string code, string msg) => new(code, ErrorType.Conflict, msg);
     public static Error Validation(string code, string msg) => new(code, ErrorType.Validation, msg);
+
+    public static Error Validation(IReadOnlyDictionary<string, string[]> fields) =>
+        new("validation.failed", ErrorType.Validation, "Dữ liệu không hợp lệ") { Fields = fields };
 }
 
-public class Result<T>
+// Interface chung để LoggingBehavior/ResultExtensions xử lý cả 2 loại Result bằng một nhánh
+public interface IResult
+{
+    bool IsSuccess { get; }
+    Error? Error { get; }
+}
+
+// Cho command không trả gì (ToggleChannel, DeleteSavedIdea) — tránh Result<bool> vô nghĩa
+public sealed class Result : IResult
 {
     public bool IsSuccess { get; }
-    public T? Value { get; }
     public Error? Error { get; }
 
+    public static Result Success() => new(true, null);
+    public static Result Failure(Error error) => new(false, error);
+}
+
+public sealed class Result<T> : IResult
+{
+    private readonly T _value;
+
+    public bool IsSuccess { get; }
+    public Error? Error { get; }
+
+    // Đọc Value khi đã fail là bug gọi sai → throw, KHÔNG trả default (xem decisions.md)
+    public T Value => IsSuccess
+        ? _value
+        : throw new InvalidOperationException($"Result failed with error '{Error?.Code}' — cannot read Value.");
+
     public static Result<T> Success(T value) => new(true, value, null);
-    public static Result<T> Failure(Error error) => new(false, default, error);
+    public static Result<T> Failure(Error error) => new(false, default!, error);
 }
 ```
+
+Constructor của cả hai là `private` — chỉ vào được qua `Success()`/`Failure()`, không tạo được trạng thái vô lý kiểu `IsSuccess = true` mà vẫn có `Error`. **Không có implicit conversion** `T → Result<T>`: handler luôn gọi tường minh `Result<int>.Success(channel.Id)`. Lý do của cả 3 quyết định này (kèm phương án bị loại) ở [`decisions.md`](decisions.md) mục *Application — mục 3, Batch 1*.
 
 `Error` mang **`ErrorType`** chứ không phải `string` đơn thuần — nhờ đó API map được sang HTTP status ở **một chỗ duy nhất**:
 
