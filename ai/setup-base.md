@@ -39,7 +39,7 @@ Chưa cần: YouTube API thật, job chạy thật, trending score, test project
 - [x] `IYTTrendingDbContext` — làm sớm ở mục 4 vì `YTTrendingDbContext` cần implement nó
 - [ ] `IYouTubeClient`
 - [ ] `LoggingBehavior` + `ValidationBehavior`
-- [ ] Options: `TrackingOptions`, `TrendingOptions`, `JobOptions` (validate on start)
+- [x] Options: `TrackingOptions`, `TrendingOptions`, `JobOptions` (validate on start)
 - [ ] `AddApplication()`
 
 ## 4. Infrastructure — Persistence ✅ XONG

@@ -485,7 +485,7 @@ Invariant vi phạm ném `InvalidOperationException`, không tạo `DomainExcept
 - [ ] `Common/Interfaces/IYTTrendingDbContext.cs` — 5 `DbSet<T>` + `SaveChangesAsync`
 - [ ] `Common/Interfaces/IYouTubeClient.cs` — `GetChannelAsync`, `GetRecentShortsAsync`, `GetVideoStatsAsync` (ký chữ tạm, sửa khi làm Discovery)
 - [ ] `Common/Behaviors/`: `LoggingBehavior`, `ValidationBehavior` (gom lỗi vào `Error.Fields`)
-- [ ] `Common/Options/`: `TrackingOptions`, `TrendingOptions`, `JobOptions` — kèm DataAnnotations (`[Range]`) để `ValidateOnStart` bắt được
+- [x] `Common/Options/`: `TrackingOptions`, `TrendingOptions`, `JobOptions` — kèm DataAnnotations (`[Range]`) để `ValidateOnStart` bắt được
 - [ ] `DependencyInjection.cs` → `AddApplication()`
 
 ✅ Nghiệm thu: build sạch. Application **không** reference Npgsql.
