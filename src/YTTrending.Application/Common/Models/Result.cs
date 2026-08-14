@@ -1,4 +1,4 @@
-namespace YTTrending.Application.Common;
+namespace YTTrending.Application.Common.Models;
 
 public interface IResult
 {

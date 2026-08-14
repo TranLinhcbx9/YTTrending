@@ -1,4 +1,4 @@
-namespace YTTrending.Application.Common;
+namespace YTTrending.Application.Common.Models;
 
 public enum ErrorType { Validation, NotFound, Conflict }
 
