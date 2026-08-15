@@ -33,9 +33,9 @@ Chưa cần: YouTube API thật, job chạy thật, trending score, test project
 
 ## 3. Application — khối dùng chung
 
-- [ ] `Result` / `Result<T>` / `Error` (có `ErrorType` + lỗi nhiều field)
-- [ ] `PagedResult<T>` + `PagedQuery` (có cap page size)
-- [ ] `QueryableExtensions` — `ToPagedResultAsync`, `WhereIf`
+- [x] `Result` / `Result<T>` / `Error` (có `ErrorType` + lỗi nhiều field)
+- [x] `PagedResult<T>` + `PagedQuery` (có cap page size)
+- [x] `QueryableExtensions` — `ToPagedResultAsync`, `WhereIf`
 - [x] `IYTTrendingDbContext` — làm sớm ở mục 4 vì `YTTrendingDbContext` cần implement nó
 - [ ] `IYouTubeClient`
 - [ ] `LoggingBehavior` + `ValidationBehavior`

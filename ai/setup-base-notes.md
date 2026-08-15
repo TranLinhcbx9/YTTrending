@@ -201,29 +201,51 @@ Nếu chốt config đọc từ `appsettings.json` (pending #3, đề xuất đ�
 
 Những thứ **mọi feature đều đụng tới**. Làm ở base thì viết một lần, làm sau thì phải sửa lại từng handler. Nguyên tắc chọn: chỉ đưa vào base thứ có **ít nhất 2 chỗ dùng thật trong Phase 1** — còn lại để feature nào cần thì tự viết.
 
-### A14. Paging — `PagedResult<T>` ✅ nên có
+### A14. Paging — `PagedResult<T>` ✅ (code xong ở Batch 2, 15/08/2026)
 
 Dashboard có thể tới ~5.000 video (50 channel × 100 video đang track). Trả hết một lần là hỏng cả API lẫn Angular. Và vì FE là project riêng, **hình dạng response phải chốt ngay từ base** — đổi sau là sửa cả hai đầu.
 
+Dưới đây là **code thật**, không phải sketch — bản đầu của mục này lệch 3 chỗ so với code cuối, xem gạch đầu dòng sau khối.
+
 ```csharp
-// Application/Common/Models/PagedResult.cs
+// Application/Common/Models/PagedResult.cs — hình dạng ĐI RA
 public record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount)
 {
+    private readonly int _pageSize = PageSize >= 1
+        ? PageSize
+        : throw new ArgumentOutOfRangeException(nameof(PageSize), PageSize, "PageSize phải ≥ 1.");
+
+    public int PageSize
+    {
+        get => _pageSize;
+        init => _pageSize = value >= 1
+            ? value
+            : throw new ArgumentOutOfRangeException(nameof(value), value, "PageSize phải ≥ 1.");
+    }
+
     public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
     public bool HasNext => Page < TotalPages;
 }
 
-// Application/Common/Models/PagedQuery.cs — base cho mọi query có phân trang
+// Application/Common/Models/PagedQuery.cs — hình dạng ĐI VÀO, base cho mọi query có phân trang
 public abstract record PagedQuery
 {
+    private const int DefaultPageSize = 20;
     private const int MaxPageSize = 100;
-    private int _pageSize = 20;
 
-    public int Page { get; init; } = 1;
+    private readonly int _page = 1;
+    private readonly int _pageSize = DefaultPageSize;
+
+    public int Page
+    {
+        get => _page;
+        init => _page = value < 1 ? 1 : value;
+    }
+
     public int PageSize
     {
         get => _pageSize;
-        init => _pageSize = value is < 1 or > MaxPageSize ? 20 : value;   // chặn ?pageSize=100000
+        init => _pageSize = value < 1 ? DefaultPageSize : Math.Min(value, MaxPageSize);
     }
 }
 
@@ -233,18 +255,30 @@ public static async Task<PagedResult<T>> ToPagedResultAsync<T>(
 {
     var total = await query.CountAsync(ct);
     var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+
     return new PagedResult<T>(items, page, pageSize, total);
 }
 ```
 
-Ba lưu ý:
+**Ba chỗ code thật khác sketch ban đầu** — nếu đọc lại notes rồi gõ theo trí nhớ thì sẽ ra bản cũ:
+
+1. **`PagedQuery.Page` cũng phải chặn**, không chỉ `PageSize`. Sketch để `Page { get; init; } = 1` trần → `?page=0` cho ra `Skip((0-1)*20)` = `Skip(-20)` → Postgres báo *"OFFSET must not be negative"*, tức **500** chứ không phải trang rỗng.
+2. **Vượt trần thì kẹp về trần, không reset về default.** Sketch viết `value is < 1 or > MaxPageSize ? 20 : value` — xin 150 lại nhận 20. Bản thật `value < 1 ? DefaultPageSize : Math.Min(value, MaxPageSize)`: xin 150 được 100, sát ý định người gọi hơn.
+3. **`PagedResult` ném khi `PageSize < 1`.** Bỏ trống thì `TotalCount / (double)0` ra `Infinity`, `(int)Math.Ceiling(Infinity)` trong ngữ cảnh `unchecked` mặc định ra **`int.MinValue`** — `totalPages: -2147483648` đi thẳng ra JSON, không throw không log. Đúng cạm bẫy A4 mục (b).
+
+> ⚠️ Validate phải nằm ở **`init` accessor + backing field**, không phải ở property initializer của positional record. Bản initializer chỉ chạy ở primary constructor — `result with { PageSize = 0 }` đi qua copy-constructor (chép thẳng backing field) nên vẫn lọt.
+
+Hai hành vi ngược nhau cho cùng một field là **cố ý**: `PagedQuery` nhận số từ query string của client → kẹp; `PagedResult` chỉ do code mình dựng → sai là bug, ném. Cùng ranh giới với `Result.Value` (A15) và `VideoStateRules` (S2).
+
+Bốn lưu ý:
 - **Cap `PageSize` ngay trong model**, đừng tin FE. Không có auth thì cũng không có ai chặn `?pageSize=999999`.
-- `.Skip()` **bắt buộc phải có `OrderBy` đứng trước**, nếu không Postgres trả thứ tự không xác định và trang 2 lặp lại item của trang 1. Đây là bug kinh điển của offset paging.
+- ⚠️ `.Skip()` **bắt buộc có `OrderBy` đứng trước, và `OrderBy` phải kèm khóa duy nhất.** Thiếu `OrderBy` thì Postgres trả thứ tự không xác định — bug kinh điển của offset paging. Nhưng **có `OrderBy` vẫn chưa đủ**: sort theo `Score`/`LatestViews` mà 200 video cùng giá trị thì ties vẫn được phép đảo giữa 2 lần query, trang 2 vẫn lặp item. Luôn kết bằng `.ThenBy(x => x.Id)`.
+- **Đã cân nhắc nhận `IOrderedQueryable<T>` để compiler ép `OrderBy`, và bỏ.** `Select()` trả `IQueryable` nên type mất tính ordered dù SQL vẫn đúng → chặn nhầm cả code đúng; và nó không chặn được ties, tức bịt cửa dễ để hở cửa khó. Lý do đầy đủ ở [`../docs/decisions.md`](../docs/decisions.md) mục *Batch 2*. Bù lại bằng XML doc `<remarks>` ngay trên `ToPagedResultAsync` — lời nhắc nằm đúng chỗ IntelliSense hiện lúc gõ.
 - Offset paging là đủ ở quy mô này. Keyset/cursor chỉ đáng làm khi bảng lên hàng triệu dòng — không phải Phase 1.
 
 ### A15. Result pattern — bản đầy đủ ✅ (code xong ở Batch 1, 12/08/2026)
 
-Sketch ban đầu ở [`../docs/architecture.md`](../docs/architecture.md#L172) mới có `Result<T>`; **nay đã cập nhật khớp code thật** ở `Application/Common/Error.cs` + `Result.cs`. Ba điểm bổ sung so với sketch đó:
+Sketch ban đầu ở [`../docs/architecture.md`](../docs/architecture.md#L172) mới có `Result<T>`; **nay đã cập nhật khớp code thật** ở `Application/Common/Models/Error.cs` + `Models/Result.cs` (dời vào `Models/` ở Batch 2 — xem luật xếp folder cuối S3). Ba điểm bổ sung so với sketch đó:
 
 **(1) `Result` không generic** — cho command không trả gì (`ToggleChannel`, `DeleteSavedIdea`). Không có thì phải viết `Result<bool>` hoặc `Result<Unit>` khắp nơi, xấu và vô nghĩa.
 
@@ -479,14 +513,22 @@ Invariant vi phạm ném `InvalidOperationException`, không tạo `DomainExcept
 
 ### S3. Application — phần Common
 
-- [ ] `Common/Result.cs`, `Common/Error.cs` — bản đầy đủ: thêm `Result` không generic + `Error.Fields` + implicit conversion (A15)
-- [ ] `Common/Models/PagedResult.cs`, `Common/Models/PagedQuery.cs` (A14)
-- [ ] `Common/Extensions/QueryableExtensions.cs` — `ToPagedResultAsync`, `WhereIf` (A14, A17)
-- [ ] `Common/Interfaces/IYTTrendingDbContext.cs` — 5 `DbSet<T>` + `SaveChangesAsync`
+- [x] `Common/Models/Result.cs`, `Common/Models/Error.cs` — bản đầy đủ: thêm `Result` không generic + `Error.Fields`. **Không** implicit conversion (A15 đề xuất rồi bỏ — [`../docs/decisions.md`](../docs/decisions.md) mục *Batch 1*)
+- [x] `Common/Models/PagedResult.cs`, `Common/Models/PagedQuery.cs` (A14)
+- [x] `Common/Extensions/QueryableExtensions.cs` — `ToPagedResultAsync`, `WhereIf` (A14, A17)
+- [x] `Common/Interfaces/IYTTrendingDbContext.cs` — 5 `DbSet<T>` + `SaveChangesAsync` *(làm sớm ở mục 4 vì `YTTrendingDbContext` cần implement nó)*
 - [ ] `Common/Interfaces/IYouTubeClient.cs` — `GetChannelAsync`, `GetRecentShortsAsync`, `GetVideoStatsAsync` (ký chữ tạm, sửa khi làm Discovery)
 - [ ] `Common/Behaviors/`: `LoggingBehavior`, `ValidationBehavior` (gom lỗi vào `Error.Fields`)
 - [x] `Common/Options/`: `TrackingOptions`, `TrendingOptions`, `JobOptions` — kèm DataAnnotations (`[Range]`) để `ValidateOnStart` bắt được
 - [ ] `DependencyInjection.cs` → `AddApplication()`
+
+**Luật xếp folder trong `Common/`** (chốt ở Batch 2, sau khi chính mục này tự mâu thuẫn — `Common/Result.cs` ở root nhưng `Common/Models/PagedResult.cs` trong folder, dù cả bốn đều là record mang dữ liệu):
+
+- **`Models/`** — mọi type dữ liệu: `Error`, `Result`, `PagedResult`, `PagedQuery`, và DTO dùng chung nếu có.
+- **Folder còn lại chia theo vai trò**, không theo "là type gì": `Interfaces/`, `Options/`, `Extensions/`, `Behaviors/`.
+- **Root** chỉ giữ thứ không rơi vào hai nhóm trên — hiện là `VideoStateRules.cs` (static class chứa rule, không phải type dữ liệu, cũng không phải vai trò hạ tầng).
+
+Type mới sinh ra sau này cứ theo thứ tự đó mà xếp: là dữ liệu → `Models/`; phục vụ một vai trò hạ tầng → folder vai trò; không cả hai → root.
 
 ✅ Nghiệm thu: build sạch. Application **không** reference Npgsql.
 

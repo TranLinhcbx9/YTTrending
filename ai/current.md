@@ -10,7 +10,7 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 |---|---|
 | 1. Nền solution | ✅ Xong |
 | 2. Domain | ✅ Xong |
-| 3. Application — khối dùng chung | 🟡 **Đang làm** — Batch 1 + 3/6 xong (`Error`+`Result`, Options), tiếp theo Batch 2 (`PagedResult`/`PagedQuery`/`QueryableExtensions`) |
+| 3. Application — khối dùng chung | 🟡 **Đang làm** — Batch 1 + 3 + 2 /6 xong (`Error`+`Result`, Options, Paging), tiếp theo Batch 4 (`IYouTubeClient`) |
 | 4. Infrastructure — Persistence | ✅ Xong |
 | 5. API — wiring | ⬜ |
 | 6. Slice nghiệm thu (`AddChannel`) | ⬜ |
@@ -20,11 +20,23 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 
 - **Đã làm mục 4 trước mục 3** — cố ý: mục 4 chỉ cần đúng 1 thứ từ mục 3 là `IYTTrendingDbContext` (đã làm sớm), còn `Result`/`Behavior`/`Options` thì persistence không dùng tới. Đi vòng này để chốt được schema + migration sớm, vì `UseSnakeCaseNamingConvention()` **buộc phải có trước migration đầu tiên** (A3) — chậm là phải drop DB làm lại.
 - **Mục 3 chia 6 batch**, thứ tự chạy đã chốt: **1 → 3 → 2 → 4 → 5 → 6**. Batch 1 đi đầu vì là chỗ duy nhất còn quyết định thiết kế; các batch sau chủ yếu chép từ code mẫu A14/A17/S3.
-- **Batch 1 xong (12/08/2026)** — `Common/Error.cs` + `Common/Result.cs`. 2 câu hỏi treo trước đây (`IResult`? `.Value` khi fail?) **đã chốt**, cùng với quyết định thứ 3 phát sinh khi làm (bỏ implicit conversion) — cả 3 ghi ở [`../docs/decisions.md`](../docs/decisions.md) mục *Application — mục 3, Batch 1*.
+- **Batch 1 xong (12/08/2026)** — `Common/Models/Error.cs` + `Common/Models/Result.cs` (ban đầu ở `Common/` root, dời vào `Models/` ở Batch 2). 2 câu hỏi treo trước đây (`IResult`? `.Value` khi fail?) **đã chốt**, cùng với quyết định thứ 3 phát sinh khi làm (bỏ implicit conversion) — cả 3 ghi ở [`../docs/decisions.md`](../docs/decisions.md) mục *Application — mục 3, Batch 1*.
 - **Batch 3 xong (13/08/2026)** — `Common/Options/{TrackingOptions,TrendingOptions,JobOptions}.cs`, `[Range]` theo [`../docs/config.md`](../docs/config.md). Quyết định phát sinh: `TrendingOptions` không lặp `MinViewsThreshold` (dùng chung của `TrackingOptions`), `JobOptions` chỉ có `Enabled` — ghi ở [`../docs/decisions.md`](../docs/decisions.md) mục *Application — mục 3, Batch 3*. **Chưa đăng ký** `AddOptions<T>().Bind(...).ValidateDataAnnotations().ValidateOnStart()` — đó là việc của Batch 6 (`AddApplication()`).
-- Bước tiếp theo: **Batch 2 — `PagedResult`/`PagedQuery`/`QueryableExtensions`**, rồi 4 (`IYouTubeClient`), 5 (2 behavior), 6 (`AddApplication()` — bind cả 3 Options vào đây). `AddInfrastructure()` hiện không cần đụng tới 3 Options này.
+- **Batch 2 xong (15/08/2026)** — `Common/Models/{PagedResult,PagedQuery}.cs` + `Common/Extensions/QueryableExtensions.cs`. Kèm theo là **luật xếp folder** cho `Common/`: type dữ liệu vào `Models/`, folder còn lại theo vai trò, root chỉ giữ `VideoStateRules` — chốt vì S3/A14 đang tự mâu thuẫn. Đã dời `Error.cs`/`Result.cs` sang `Models/` ở commit riêng `cf91181` (git nhận đúng dạng rename), làm được rẻ vì Batch 1 chưa có ai tiêu thụ.
+  - 5 quyết định ghi ở [`../docs/decisions.md`](../docs/decisions.md) mục *Application — mục 3, Batch 2*. Đáng nhớ nhất: **bỏ `IOrderedQueryable`** (chặn nhầm code đúng sau `Select`, mà vẫn không chặn được ties) → thứ tự trang giờ là **quy ước**, phải tự nhớ `OrderBy` + `ThenBy(x => x.Id)`.
+  - A14 đã viết lại khớp code thật — bản cũ lệch 3 chỗ (`Page` không chặn, `PageSize` reset về 20, `PagedResult` không chặn `PageSize < 1`).
+  - ✅ Probe thật (project console tạm ngoài repo, không đụng `Program.cs`): `PageSize` 150→**100**, 0/-5→**20**, `Page` 0/-3→**1**, mặc định `1/20`; `PagedResult` ném cả đường ctor lẫn đường `with { PageSize = 0 }`.
+- Bước tiếp theo: **Batch 4 (`IYouTubeClient`)**, rồi 5 (2 behavior), 6 (`AddApplication()` — bind cả 3 Options vào đây). `AddInfrastructure()` hiện không cần đụng tới 3 Options này.
 - Chi tiết: [`setup-base-notes.md`](setup-base-notes.md) mục S3 + A14/A15/A17.
-- `GlobalUsings.cs` của **Application đã mở khoá** dòng `YTTrending.Application.Common`; bên **API vẫn để comment** — chờ Batch 6 và mục 5 (`YTTrending.API.Common` chưa tồn tại).
+- `GlobalUsings.cs` của **Application** đã mở khoá `YTTrending.Application.Common` + `.Common.Models` + `.Common.Extensions`; bên **API vẫn để comment** — chờ Batch 6 và mục 5 (`YTTrending.API.Common` chưa tồn tại).
+  - ⚠️ **Mìn cho mục 5:** khi API mở khoá `.Common.Models` để viết `ResultExtensions`, `IResult` của mình sẽ đụng `Microsoft.AspNetCore.Http.IResult` (nằm trong implicit usings của Web SDK) → CS0104 ambiguous. Gỡ bằng `global using IResult = YTTrending.Application.Common.Models.IResult;` bên API.
+
+## Nợ verify (chốt ở mục 6)
+
+- **`required` + EF Core 8 materialization** (nợ từ mục 2) — POST qua Swagger → có row → GET đọc lại được.
+- **Model binding có ghi được vào `init` accessor không.** Về lý thuyết có (`init` chỉ là setter kèm modreq ở tầng IL, binding đi bằng reflection nên `CanWrite` vẫn `true`) nhưng chưa có đường HTTP nào để chứng minh. Tiêu chí S6 `?pageSize=999999` → cap về 100 là chỗ đóng. Vỡ thì lùi `init` → `set`, mất tính bất biến chứ không mất việc cap.
+- **Hình dạng `PagedResult` qua JSON** — `GET ?page=1&pageSize=2` đúng shape đã chốt với FE.
+- **Thứ tự trang ổn định** — thêm tiêu chí vào S6: seed ≥4 channel rồi so `?page=1&pageSize=2` với `?page=2&pageSize=2`, **hai trang không được trùng item nào**. Đã bỏ `IOrderedQueryable` nên không có gì chặn lúc compile; đây là chỗ duy nhất bug thứ-tự-bất-định lộ ra trước khi lên Dashboard thật.
 
 ## Block / Cần quyết định
 
@@ -73,7 +85,7 @@ Toàn bộ quyết định setup base đã ghi vào [`../docs/decisions.md`](../
 
 ✅ Nghiệm thu: `dotnet build` → 0 warning / 0 error · grep `Entities/` không còn method/ctor nào · probe object initializer + `VideoStateRules` → compile sạch · probe `new Video { Title = "x" }` → **CS9035** ×9 field bắt buộc, `required` có hiệu lực.
 
-⚠️ **Còn nợ verify:** `required` + EF Core 8 materialization. Về lý thuyết EF ghi qua backing field nên không dính check compile-time. Mục 4 đã chứng minh được **một nửa**: model build + migration sinh đúng, nhưng chưa có đường ghi/đọc thật nào nên **chưa đóng** — dời mốc sang **mục 6 (`AddChannel`)**: POST qua Swagger → có row trong DB → GET đọc lại được. Vỡ thì bỏ `required`, không ảnh hưởng quyết định anemic.
+⚠️ **Còn nợ verify:** `required` + EF Core 8 materialization — gom vào mục [Nợ verify](#nợ-verify-chốt-ở-mục-6) ở trên. Về lý thuyết EF ghi qua backing field nên không dính check compile-time. Mục 4 đã chứng minh được **một nửa**: model build + migration sinh đúng, nhưng chưa có đường ghi/đọc thật nào nên **chưa đóng** — dời mốc sang **mục 6 (`AddChannel`)**: POST qua Swagger → có row trong DB → GET đọc lại được. Vỡ thì bỏ `required`, không ảnh hưởng quyết định anemic.
 
 ### Mục 4 — Infrastructure / Persistence ✅
 
