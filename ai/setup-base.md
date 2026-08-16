@@ -37,7 +37,7 @@ Chưa cần: YouTube API thật, job chạy thật, trending score, test project
 - [x] `PagedResult<T>` + `PagedQuery` (có cap page size)
 - [x] `QueryableExtensions` — `ToPagedResultAsync`, `WhereIf`
 - [x] `IYTTrendingDbContext` — làm sớm ở mục 4 vì `YTTrendingDbContext` cần implement nó
-- [ ] `IYouTubeClient`
+- [x] `IYouTubeClient`
 - [ ] `LoggingBehavior` + `ValidationBehavior`
 - [x] Options: `TrackingOptions`, `TrendingOptions`, `JobOptions` (validate on start)
 - [ ] `AddApplication()`

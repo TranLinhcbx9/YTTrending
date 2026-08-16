@@ -10,7 +10,7 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 |---|---|
 | 1. Nền solution | ✅ Xong |
 | 2. Domain | ✅ Xong |
-| 3. Application — khối dùng chung | 🟡 **Đang làm** — Batch 1 + 3 + 2 /6 xong (`Error`+`Result`, Options, Paging), tiếp theo Batch 4 (`IYouTubeClient`) |
+| 3. Application — khối dùng chung | 🟡 **Đang làm** — Batch 1 + 3 + 2 + 4 /6 xong (`Error`+`Result`, Options, Paging, `IYouTubeClient`), tiếp theo Batch 5 (2 behavior) |
 | 4. Infrastructure — Persistence | ✅ Xong |
 | 5. API — wiring | ⬜ |
 | 6. Slice nghiệm thu (`AddChannel`) | ⬜ |
@@ -26,7 +26,12 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
   - 5 quyết định ghi ở [`../docs/decisions.md`](../docs/decisions.md) mục *Application — mục 3, Batch 2*. Đáng nhớ nhất: **bỏ `IOrderedQueryable`** (chặn nhầm code đúng sau `Select`, mà vẫn không chặn được ties) → thứ tự trang giờ là **quy ước**, phải tự nhớ `OrderBy` + `ThenBy(x => x.Id)`.
   - A14 đã viết lại khớp code thật — bản cũ lệch 3 chỗ (`Page` không chặn, `PageSize` reset về 20, `PagedResult` không chặn `PageSize < 1`).
   - ✅ Probe thật (project console tạm ngoài repo, không đụng `Program.cs`): `PageSize` 150→**100**, 0/-5→**20**, `Page` 0/-3→**1**, mặc định `1/20`; `PagedResult` ném cả đường ctor lẫn đường `with { PageSize = 0 }`.
-- Bước tiếp theo: **Batch 4 (`IYouTubeClient`)**, rồi 5 (2 behavior), 6 (`AddApplication()` — bind cả 3 Options vào đây). `AddInfrastructure()` hiện không cần đụng tới 3 Options này.
+- **Batch 4 xong (16/08/2026)** — `Common/Interfaces/IYouTubeClient.cs` (3 method) + `Common/Models/YouTubeModels.cs` (`ChannelInfo` / `ShortVideoInfo` / `VideoStats`). Không đụng `GlobalUsings.cs`: `.Common.Models` đã mở khoá từ Batch 2, còn `Common.Interfaces` thì `IYTTrendingDbContext` cũng đang `using` tại chỗ — giữ nhất quán.
+  - **Chữ ký là TẠM**, S3 ghi sẵn "sửa khi làm Discovery". Chỗ hở đã biết: `GetRecentShortsAsync(channelId, limit, ct)` chỉ phủ vế "N Shorts mới nhất", vế `RecentDays` dựa vào việc `RecentShortsLimit` đủ lớn để phủ hết. Không thêm `publishedAfter` vì `search.list` ghép nó với `maxResults` là **AND** chứ không phải OR — đúng OR phải gọi 2 lần, mà `search.list` tốn **100 đơn vị quota/call**.
+  - 7 quyết định ghi ở [`../docs/decisions.md`](../docs/decisions.md) mục *Application — mục 3, Batch 4*. Đáng nhớ nhất: **client không biết config, không lọc ngưỡng** — toàn bộ rule nghiệp vụ (2 vế OR + `MinViewsThreshold`) ở handler, để `FakeYouTubeClient` không phải chép lại luật nào.
+  - 🔑 **Cho mục 7 (Metrics Update Job):** `VideoStats` cố tình **không** mang mốc thời gian → job phải tự set `SnapshotAt` bằng `TimeProvider`, **một** `now` duy nhất cho cả lượt sync. Chia lô mà mỗi lô một mốc thì snapshot cùng lượt lệch nhau vài chục giây, Velocity (hiệu 2 snapshot) sai theo.
+  - 🔑 **Cũng cho mục 7:** `GetVideoStatsAsync` trả list **có thể ngắn hơn input** (video đã xoá/private vắng mặt) — đối chiếu theo `YoutubeVideoId`, tuyệt đối không theo index.
+- Bước tiếp theo: **Batch 5 (2 behavior)**, rồi 6 (`AddApplication()` — bind cả 3 Options vào đây). `AddInfrastructure()` hiện không cần đụng tới 3 Options này.
 - Chi tiết: [`setup-base-notes.md`](setup-base-notes.md) mục S3 + A14/A15/A17.
 - `GlobalUsings.cs` của **Application** đã mở khoá `YTTrending.Application.Common` + `.Common.Models` + `.Common.Extensions`; bên **API vẫn để comment** — chờ Batch 6 và mục 5 (`YTTrending.API.Common` chưa tồn tại).
   - ⚠️ **Mìn cho mục 5:** khi API mở khoá `.Common.Models` để viết `ResultExtensions`, `IResult` của mình sẽ đụng `Microsoft.AspNetCore.Http.IResult` (nằm trong implicit usings của Web SDK) → CS0104 ambiguous. Gỡ bằng `global using IResult = YTTrending.Application.Common.Models.IResult;` bên API.
@@ -37,6 +42,7 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 - **Model binding có ghi được vào `init` accessor không.** Về lý thuyết có (`init` chỉ là setter kèm modreq ở tầng IL, binding đi bằng reflection nên `CanWrite` vẫn `true`) nhưng chưa có đường HTTP nào để chứng minh. Tiêu chí S6 `?pageSize=999999` → cap về 100 là chỗ đóng. Vỡ thì lùi `init` → `set`, mất tính bất biến chứ không mất việc cap.
 - **Hình dạng `PagedResult` qua JSON** — `GET ?page=1&pageSize=2` đúng shape đã chốt với FE.
 - **Thứ tự trang ổn định** — thêm tiêu chí vào S6: seed ≥4 channel rồi so `?page=1&pageSize=2` với `?page=2&pageSize=2`, **hai trang không được trùng item nào**. Đã bỏ `IOrderedQueryable` nên không có gì chặn lúc compile; đây là chỗ duy nhất bug thứ-tự-bất-định lộ ra trước khi lên Dashboard thật.
+- **Chữ ký `IYouTubeClient` có dùng được thật không** (nợ từ Batch 4) — `FakeYouTubeClient` implement được cả 3 method mà không phải sửa interface. Interface thuần thì build luôn xanh, chỉ tới lúc có người implement mới biết thiếu field gì.
 
 ## Block / Cần quyết định
 

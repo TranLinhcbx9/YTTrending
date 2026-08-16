@@ -517,7 +517,7 @@ Invariant vi phạm ném `InvalidOperationException`, không tạo `DomainExcept
 - [x] `Common/Models/PagedResult.cs`, `Common/Models/PagedQuery.cs` (A14)
 - [x] `Common/Extensions/QueryableExtensions.cs` — `ToPagedResultAsync`, `WhereIf` (A14, A17)
 - [x] `Common/Interfaces/IYTTrendingDbContext.cs` — 5 `DbSet<T>` + `SaveChangesAsync` *(làm sớm ở mục 4 vì `YTTrendingDbContext` cần implement nó)*
-- [ ] `Common/Interfaces/IYouTubeClient.cs` — `GetChannelAsync`, `GetRecentShortsAsync`, `GetVideoStatsAsync` (ký chữ tạm, sửa khi làm Discovery)
+- [x] `Common/Interfaces/IYouTubeClient.cs` — `GetChannelAsync(channelId, ct)` → `ChannelInfo?` · `GetRecentShortsAsync(channelId, limit, ct)` → `IReadOnlyList<ShortVideoInfo>` · `GetVideoStatsAsync(ids, ct)` → `IReadOnlyList<VideoStats>`. 3 DTO ở `Common/Models/YouTubeModels.cs`. **Ký chữ vẫn là tạm, sửa khi làm Discovery** — xem [`../docs/decisions.md`](../docs/decisions.md) mục *Batch 4*
 - [ ] `Common/Behaviors/`: `LoggingBehavior`, `ValidationBehavior` (gom lỗi vào `Error.Fields`)
 - [x] `Common/Options/`: `TrackingOptions`, `TrendingOptions`, `JobOptions` — kèm DataAnnotations (`[Range]`) để `ValidateOnStart` bắt được
 - [ ] `DependencyInjection.cs` → `AddApplication()`
