@@ -368,6 +368,7 @@ FE là project riêng nên mỗi lần đổi hình dạng response là sửa ha
 - **Ngày giờ**: `DateTimeOffset` → ISO 8601 có offset, Angular parse thẳng.
 - **Lỗi luôn cùng một hình dạng** — chính là `Error { code, type, message, fields? }` (A15), để Angular viết **một** `HttpInterceptor` xử lý hết.
 - **List luôn bọc `PagedResult`** (A14), kể cả khi ít item — đừng chỗ trả mảng trần, chỗ trả object.
+- **Key trong `fields` là camelCase** — `ValidationBehavior` (Batch 5) hạ chữ cái đầu của `PropertyName` ngay tại nguồn. `JsonNamingPolicy.CamelCase` mặc định **chỉ** đổi tên property, **không** đổi key của `Dictionary`; không chuyển ở behavior thì `fields` lệch dạng PascalCase (`YoutubeChannelId`) giữa một response toàn camelCase. Chuyển tại nguồn còn để đường job đọc `Error.Fields` (log) thấy cùng dạng với FE — xem [`../docs/decisions.md`](../docs/decisions.md) mục *Batch 5* QĐ #4.
 
 ### A20. ❌ Những thứ KHÔNG đưa vào base
 
@@ -518,7 +519,7 @@ Invariant vi phạm ném `InvalidOperationException`, không tạo `DomainExcept
 - [x] `Common/Extensions/QueryableExtensions.cs` — `ToPagedResultAsync`, `WhereIf` (A14, A17)
 - [x] `Common/Interfaces/IYTTrendingDbContext.cs` — 5 `DbSet<T>` + `SaveChangesAsync` *(làm sớm ở mục 4 vì `YTTrendingDbContext` cần implement nó)*
 - [x] `Common/Interfaces/IYouTubeClient.cs` — `GetChannelAsync(channelId, ct)` → `ChannelInfo?` · `GetRecentShortsAsync(channelId, limit, ct)` → `IReadOnlyList<ShortVideoInfo>` · `GetVideoStatsAsync(ids, ct)` → `IReadOnlyList<VideoStats>`. 3 DTO ở `Common/Models/YouTubeModels.cs`. **Ký chữ vẫn là tạm, sửa khi làm Discovery** — xem [`../docs/decisions.md`](../docs/decisions.md) mục *Batch 4*
-- [ ] `Common/Behaviors/`: `LoggingBehavior`, `ValidationBehavior` (gom lỗi vào `Error.Fields`)
+- [x] `Common/Behaviors/`: `LoggingBehavior`, `ValidationBehavior` (gom lỗi vào `Error.Fields`) — fail → `Result.Failure` qua reflection (ràng `where TResponse : IResult`), key `fields` camelCase chuyển tại nguồn. Xem [`../docs/decisions.md`](../docs/decisions.md) mục *Batch 5*
 - [x] `Common/Options/`: `TrackingOptions`, `TrendingOptions`, `JobOptions` — kèm DataAnnotations (`[Range]`) để `ValidateOnStart` bắt được
 - [ ] `DependencyInjection.cs` → `AddApplication()`
 

@@ -10,7 +10,7 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 |---|---|
 | 1. Nền solution | ✅ Xong |
 | 2. Domain | ✅ Xong |
-| 3. Application — khối dùng chung | 🟡 **Đang làm** — Batch 1 + 3 + 2 + 4 /6 xong (`Error`+`Result`, Options, Paging, `IYouTubeClient`), tiếp theo Batch 5 (2 behavior) |
+| 3. Application — khối dùng chung | 🟡 **Đang làm** — Batch 1+3+2+4+5 /6 xong (`Error`+`Result`, Options, Paging, `IYouTubeClient`, 2 behavior), tiếp theo Batch 6 (`AddApplication()`) |
 | 4. Infrastructure — Persistence | ✅ Xong |
 | 5. API — wiring | ⬜ |
 | 6. Slice nghiệm thu (`AddChannel`) | ⬜ |
@@ -31,7 +31,11 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
   - 7 quyết định ghi ở [`../docs/decisions.md`](../docs/decisions.md) mục *Application — mục 3, Batch 4*. Đáng nhớ nhất: **client không biết config, không lọc ngưỡng** — toàn bộ rule nghiệp vụ (2 vế OR + `MinViewsThreshold`) ở handler, để `FakeYouTubeClient` không phải chép lại luật nào.
   - 🔑 **Cho mục 7 (Metrics Update Job):** `VideoStats` cố tình **không** mang mốc thời gian → job phải tự set `SnapshotAt` bằng `TimeProvider`, **một** `now` duy nhất cho cả lượt sync. Chia lô mà mỗi lô một mốc thì snapshot cùng lượt lệch nhau vài chục giây, Velocity (hiệu 2 snapshot) sai theo.
   - 🔑 **Cũng cho mục 7:** `GetVideoStatsAsync` trả list **có thể ngắn hơn input** (video đã xoá/private vắng mặt) — đối chiếu theo `YoutubeVideoId`, tuyệt đối không theo index.
-- Bước tiếp theo: **Batch 5 (2 behavior)**, rồi 6 (`AddApplication()` — bind cả 3 Options vào đây). `AddInfrastructure()` hiện không cần đụng tới 3 Options này.
+- **Batch 5 xong (16/08/2026)** — `Common/Behaviors/{LoggingBehavior,ValidationBehavior}.cs`. `dotnet build` → **0 warning / 0 error**. 4 quyết định + phần bất đối xứng constraint ghi ở [`../docs/decisions.md`](../docs/decisions.md) mục *Application — mục 3, Batch 5*.
+  - Đáng nhớ nhất: **`ValidationBehavior` ràng `where TResponse : IResult`** — từ .NET 7 DI **lặng lẽ bỏ qua** behavior không thỏa constraint, nên handler nào lỡ trả kiểu không phải `IResult` thì validate không chạy mà **không báo**; quy ước "handler luôn trả `Result`" từ nay là ràng buộc thật.
+  - 🔑 **Cho Batch 6:** `AddOpenBehavior(Logging)` phải **trước** `AddOpenBehavior(Validation)` — Logging bọc ngoài mới log được cả validation fail (`FAIL validation.failed`). Đảo thứ tự là mất dòng log đó.
+  - 2 comment trong code trỏ `QĐ #2` (`LoggingBehavior`) / `QĐ #4` (`ValidationBehavior`) — chính là số #2/#4 trong mục *Batch 5* của decisions.md, đã giữ số cho khớp.
+- Bước tiếp theo: **Batch 6** (`AddApplication()` — đăng ký 2 behavior + `AddValidatorsFromAssembly` + bind cả 3 Options vào đây). `AddInfrastructure()` hiện không cần đụng tới 3 Options này.
 - Chi tiết: [`setup-base-notes.md`](setup-base-notes.md) mục S3 + A14/A15/A17.
 - `GlobalUsings.cs` của **Application** đã mở khoá `YTTrending.Application.Common` + `.Common.Models` + `.Common.Extensions`; bên **API vẫn để comment** — chờ Batch 6 và mục 5 (`YTTrending.API.Common` chưa tồn tại).
   - ⚠️ **Mìn cho mục 5:** khi API mở khoá `.Common.Models` để viết `ResultExtensions`, `IResult` của mình sẽ đụng `Microsoft.AspNetCore.Http.IResult` (nằm trong implicit usings của Web SDK) → CS0104 ambiguous. Gỡ bằng `global using IResult = YTTrending.Application.Common.Models.IResult;` bên API.
@@ -43,6 +47,8 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 - **Hình dạng `PagedResult` qua JSON** — `GET ?page=1&pageSize=2` đúng shape đã chốt với FE.
 - **Thứ tự trang ổn định** — thêm tiêu chí vào S6: seed ≥4 channel rồi so `?page=1&pageSize=2` với `?page=2&pageSize=2`, **hai trang không được trùng item nào**. Đã bỏ `IOrderedQueryable` nên không có gì chặn lúc compile; đây là chỗ duy nhất bug thứ-tự-bất-định lộ ra trước khi lên Dashboard thật.
 - **Chữ ký `IYouTubeClient` có dùng được thật không** (nợ từ Batch 4) — `FakeYouTubeClient` implement được cả 3 method mà không phải sửa interface. Interface thuần thì build luôn xanh, chỉ tới lúc có người implement mới biết thiếu field gì.
+- **`ValidationBehavior` trả đúng `Result<T>` fail kèm `fields` camelCase** (nợ từ Batch 5) — reflection dựng `Result<int>.Failure` chỉ đúng/nổ lúc chạy: POST body sai qua Swagger → **400** với `fields` key camelCase (vd `youtubeChannelId`), **không** phải 500. Đóng ở S6.
+- **Constraint `where TResponse : IResult` không làm DI bỏ qua behavior** (nợ từ Batch 5) — nếu bị bỏ qua thì validate im lặng không chạy, request lọt xuống handler → **200 thay vì 400**. Cùng đóng ở S6: POST rỗng phải ra 400 chứ không 200.
 
 ## Block / Cần quyết định
 
