@@ -521,7 +521,7 @@ Invariant vi phạm ném `InvalidOperationException`, không tạo `DomainExcept
 - [x] `Common/Interfaces/IYouTubeClient.cs` — `GetChannelAsync(channelId, ct)` → `ChannelInfo?` · `GetRecentShortsAsync(channelId, limit, ct)` → `IReadOnlyList<ShortVideoInfo>` · `GetVideoStatsAsync(ids, ct)` → `IReadOnlyList<VideoStats>`. 3 DTO ở `Common/Models/YouTubeModels.cs`. **Ký chữ vẫn là tạm, sửa khi làm Discovery** — xem [`../docs/decisions.md`](../docs/decisions.md) mục *Batch 4*
 - [x] `Common/Behaviors/`: `LoggingBehavior`, `ValidationBehavior` (gom lỗi vào `Error.Fields`) — fail → `Result.Failure` qua reflection (ràng `where TResponse : IResult`), key `fields` camelCase chuyển tại nguồn. Xem [`../docs/decisions.md`](../docs/decisions.md) mục *Batch 5*
 - [x] `Common/Options/`: `TrackingOptions`, `TrendingOptions`, `JobOptions` — kèm DataAnnotations (`[Range]`) để `ValidateOnStart` bắt được
-- [ ] `DependencyInjection.cs` → `AddApplication()`
+- [x] `DependencyInjection.cs` → `AddApplication()`
 
 **Luật xếp folder trong `Common/`** (chốt ở Batch 2, sau khi chính mục này tự mâu thuẫn — `Common/Result.cs` ở root nhưng `Common/Models/PagedResult.cs` trong folder, dù cả bốn đều là record mang dữ liệu):
 

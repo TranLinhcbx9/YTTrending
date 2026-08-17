@@ -10,7 +10,7 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 |---|---|
 | 1. Nền solution | ✅ Xong |
 | 2. Domain | ✅ Xong |
-| 3. Application — khối dùng chung | 🟡 **Đang làm** — Batch 1+3+2+4+5 /6 xong (`Error`+`Result`, Options, Paging, `IYouTubeClient`, 2 behavior), tiếp theo Batch 6 (`AddApplication()`) |
+| 3. Application — khối dùng chung | ✅ Xong |
 | 4. Infrastructure — Persistence | ✅ Xong |
 | 5. API — wiring | ⬜ |
 | 6. Slice nghiệm thu (`AddChannel`) | ⬜ |
@@ -35,9 +35,11 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
   - Đáng nhớ nhất: **`ValidationBehavior` ràng `where TResponse : IResult`** — từ .NET 7 DI **lặng lẽ bỏ qua** behavior không thỏa constraint, nên handler nào lỡ trả kiểu không phải `IResult` thì validate không chạy mà **không báo**; quy ước "handler luôn trả `Result`" từ nay là ràng buộc thật.
   - 🔑 **Cho Batch 6:** `AddOpenBehavior(Logging)` phải **trước** `AddOpenBehavior(Validation)` — Logging bọc ngoài mới log được cả validation fail (`FAIL validation.failed`). Đảo thứ tự là mất dòng log đó.
   - 2 comment trong code trỏ `QĐ #2` (`LoggingBehavior`) / `QĐ #4` (`ValidationBehavior`) — chính là số #2/#4 trong mục *Batch 5* của decisions.md, đã giữ số cho khớp.
-- Bước tiếp theo: **Batch 6** (`AddApplication()` — đăng ký 2 behavior + `AddValidatorsFromAssembly` + bind cả 3 Options vào đây). `AddInfrastructure()` hiện không cần đụng tới 3 Options này.
+- **Batch 6 xong (17/08/2026)** — `Application/DependencyInjection.cs` → `AddApplication(config)`: `AddMediatR` (marker `typeof(DependencyInjection).Assembly`) + 2 `AddOpenBehavior` (**Logging trước Validation**) + `AddValidatorsFromAssembly` + bind cả 3 Options (`.ValidateDataAnnotations().ValidateOnStart()`). `dotnet build` cả solution → **0 warning / 0 error**. 5 quyết định ghi ở [`../docs/decisions.md`](../docs/decisions.md) mục *Application — mục 3, Batch 6*.
+  - ⚠️ **Phải thêm package `Microsoft.Extensions.Options.DataAnnotations` 8.0.0 vào Application** — `ValidateDataAnnotations` không có sẵn trong class lib (chỉ project API mới có qua shared framework ASP.NET Core), thiếu là **CS1061**. `ValidateOnStart` thì đã có sẵn trong `Options` 8.0.2, không cần thêm gì. Đã verify bằng NuGet cache + `project.assets.json` lúc plan — bảng package ở [`setup-base-notes.md`](setup-base-notes.md) S1 chưa liệt kê package này.
+  - **Mục 3 (Application — khối dùng chung) đóng.** `AddInfrastructure()` không đụng tới 3 Options này.
 - Chi tiết: [`setup-base-notes.md`](setup-base-notes.md) mục S3 + A14/A15/A17.
-- `GlobalUsings.cs` của **Application** đã mở khoá `YTTrending.Application.Common` + `.Common.Models` + `.Common.Extensions`; bên **API vẫn để comment** — chờ Batch 6 và mục 5 (`YTTrending.API.Common` chưa tồn tại).
+- Bước tiếp theo: **mục 5** (API wiring) — `Program.cs` gọi `AddApplication(builder.Configuration)` + `AddInfrastructure(...)`; đây là chỗ pipeline behavior + `ValidateOnStart` **thật sự chạy lần đầu** (Generic Host). `GlobalUsings.cs` của **Application** đã mở khoá `YTTrending.Application.Common` + `.Common.Models` + `.Common.Extensions` (DI file dùng `.Common.Behaviors`/`.Common.Options` qua `using` tại file); bên **API vẫn để comment** — chờ mục 5 (`YTTrending.API.Common` chưa tồn tại).
   - ⚠️ **Mìn cho mục 5:** khi API mở khoá `.Common.Models` để viết `ResultExtensions`, `IResult` của mình sẽ đụng `Microsoft.AspNetCore.Http.IResult` (nằm trong implicit usings của Web SDK) → CS0104 ambiguous. Gỡ bằng `global using IResult = YTTrending.Application.Common.Models.IResult;` bên API.
 
 ## Nợ verify (chốt ở mục 6)

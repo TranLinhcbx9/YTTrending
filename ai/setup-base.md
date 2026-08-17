@@ -31,7 +31,7 @@ Chưa cần: YouTube API thật, job chạy thật, trending score, test project
 - [x] 5 entity: `Channel`, `Video`, `VideoMetricSnapshot`, `TrendingScore`, `SavedIdea`
 - [x] Invariant ở `Application/Common/VideoStateRules.cs` (entity anemic): `Archive()` chặn terminal-state + set `ArchivedAt`, `StartTracking()` chỉ từ NEW
 
-## 3. Application — khối dùng chung
+## 3. Application — khối dùng chung ✅ XONG
 
 - [x] `Result` / `Result<T>` / `Error` (có `ErrorType` + lỗi nhiều field)
 - [x] `PagedResult<T>` + `PagedQuery` (có cap page size)
@@ -40,7 +40,7 @@ Chưa cần: YouTube API thật, job chạy thật, trending score, test project
 - [x] `IYouTubeClient`
 - [x] `LoggingBehavior` + `ValidationBehavior`
 - [x] Options: `TrackingOptions`, `TrendingOptions`, `JobOptions` (validate on start)
-- [ ] `AddApplication()`
+- [x] `AddApplication()`
 
 ## 4. Infrastructure — Persistence ✅ XONG
 
