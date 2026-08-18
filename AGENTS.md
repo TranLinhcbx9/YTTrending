@@ -13,7 +13,8 @@ Công cụ cá nhân theo dõi kênh YouTube Shorts đối thủ, tự động t
 |---|---|
 | [`docs/overview.md`](docs/overview.md) | Mục tiêu Phase 1 + Success Criteria |
 | [`docs/config.md`](docs/config.md) | Toàn bộ config (Tracking, Trending weights...) |
-| [`docs/architecture.md`](docs/architecture.md) | Layer structure, trách nhiệm từng project, background job hosting |
+| [`docs/architecture.md`](docs/architecture.md) | Cấu trúc tầng, trách nhiệm project, quy tắc phụ thuộc — **không chứa code** (trỏ `src/`) |
+| [`docs/coding-convention.md`](docs/coding-convention.md) | Coding convention rút gọn (.NET 8): naming, layer, Result, EF, config, job |
 | [`docs/database.md`](docs/database.md) | Schema đề xuất: Channels, Videos, MetricsSnapshots, SavedIdeas |
 | [`docs/domain/channel-management.md`](docs/domain/channel-management.md) | Quản lý danh sách channel theo dõi |
 | [`docs/domain/discovery-engine.md`](docs/domain/discovery-engine.md) | Rule lấy video + flow discovery + duplicate check |
@@ -24,11 +25,11 @@ Công cụ cá nhân theo dõi kênh YouTube Shorts đối thủ, tự động t
 | [`docs/domain/video-detail.md`](docs/domain/video-detail.md) | Chi tiết video + chart |
 | [`docs/domain/saved-ideas.md`](docs/domain/saved-ideas.md) | Bookmark video + note (không tag, không bookmark channel) |
 | [`docs/domain/background-jobs.md`](docs/domain/background-jobs.md) | Sync Channel Job + Metrics Update Job |
-| [`docs/decisions.md`](docs/decisions.md) | Pending items + quyết định đã chốt (ADR-style) |
+| [`docs/decisions.md`](docs/decisions.md) | **Vì sao** (ADR) + phương án đã bỏ + pending — nguồn chân lý cho lý do |
 | [`docs/out-of-scope.md`](docs/out-of-scope.md) | Những gì Phase 1 KHÔNG làm |
 | [`ai/current.md`](ai/current.md) | Đang làm module nào, block ở đâu |
 | [`ai/setup-base.md`](ai/setup-base.md) | Checklist dựng base BE — chỉ liệt kê việc cần làm |
-| [`ai/setup-base-notes.md`](ai/setup-base-notes.md) | Ghi chú chi tiết cho từng mục của checklist: cách làm, code mẫu, cạm bẫy |
+| [`ai/setup-base-notes.md`](ai/setup-base-notes.md) | Cách dựng base + cạm bẫy từng mục (code phần đã build trỏ `src/`) |
 
 ## Nguyên tắc chung của dự án
 
@@ -36,3 +37,4 @@ Công cụ cá nhân theo dõi kênh YouTube Shorts đối thủ, tự động t
 - **VideoId** (do YouTube cấp) là khóa duy nhất để so sánh video, không dùng title/thumbnail vì có thể bị đổi.
 - **ARCHIVED là trạng thái cuối** — không có đường quay lại TRACKING.
 - Phase 1 là **single-user, không login, không AI, không đa nền tảng** — xem chi tiết [`docs/out-of-scope.md`](docs/out-of-scope.md).
+- **Mỗi topic một chủ (SSOT)** — mỗi fact chỉ giải thích đầy đủ ở **một** file, nơi khác link tới: "cái gì" ở [`docs/coding-convention.md`](docs/coding-convention.md), "tại sao / đã bỏ gì" ở [`docs/decisions.md`](docs/decisions.md), **code ở `src/`** (docs không nhúng code), số config ở [`docs/config.md`](docs/config.md), schema ở [`docs/database.md`](docs/database.md). Sửa docs phải giữ nguyên tắc này.

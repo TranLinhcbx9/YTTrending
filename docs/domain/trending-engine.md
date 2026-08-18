@@ -6,13 +6,7 @@ Xếp hạng video đáng chú ý dựa trên tốc độ tăng trưởng view (
 
 ## Config
 
-```json
-{
-  "ViewGrowthWeight": 60,
-  "VelocityWeight": 40,
-  "MinViewsThreshold": 100000
-}
-```
+Trọng số công thức (`ViewGrowthWeight`, `VelocityWeight`) — giá trị + section JSON ở [`../config.md`](../config.md). Công thức thật chỉ dùng 2 trọng số này: `TrendingOptions` **không** mang `MinViewsThreshold` (xem [`../decisions.md`](../decisions.md) mục *Batch 3*).
 
 ## Công thức
 

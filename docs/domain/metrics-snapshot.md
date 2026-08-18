@@ -37,5 +37,5 @@ Dùng để tính:
 ## Liên quan
 
 - Snapshot là input cho [`trending-engine.md`](trending-engine.md).
-- Snapshot frequency = SyncIntervalHours, xem pending item ở [`../decisions.md`](../decisions.md).
+- Snapshot frequency = `SyncIntervalHours` (giá trị ở [`../config.md`](../config.md)); pending "tách riêng khỏi sync interval" ở [`../decisions.md`](../decisions.md).
 - Job tạo snapshot: [`background-jobs.md`](background-jobs.md) (Metrics Update Job).

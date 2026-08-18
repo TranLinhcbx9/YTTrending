@@ -51,52 +51,11 @@ Ngược lại `saved_ideas.created_at` đúng nghĩa là "row này sinh lúc n�
 
 #### (2) Base class + override trong `YTTrendingDbContext` (đã chốt: cách A)
 
-```csharp
-// Domain/Common/AuditableEntity.cs
-public abstract class AuditableEntity
-{
-    public DateTimeOffset CreatedAt { get; private set; }
-    public DateTimeOffset UpdatedAt { get; private set; }
-}
-```
+Code: [`../src/YTTrending.Domain/Common/AuditableEntity.cs`](../src/YTTrending.Domain/Common/AuditableEntity.cs) — `CreatedAt`/`UpdatedAt` với `private set`.
 
 `private set` để giữ đúng nguyên tắc Domain (không cho object initializer set bừa). Vẫn ghi được, nhưng phải ghi **qua `ChangeTracker` chứ không qua property**:
 
-```csharp
-// Infrastructure/Persistence/YTTrendingDbContext.cs
-public class YTTrendingDbContext(DbContextOptions<YTTrendingDbContext> options, TimeProvider clock)
-    : DbContext(options), IYTTrendingDbContext
-{
-    // ... DbSet<T> ...
-
-    public override Task<int> SaveChangesAsync(CancellationToken ct = default)
-    {
-        ApplyAuditFields();
-        return base.SaveChangesAsync(ct);
-    }
-
-    // BẮT BUỘC override cả bản sync — chỗ nào lỡ gọi SaveChanges() thì audit vẫn chạy
-    public override int SaveChanges()
-    {
-        ApplyAuditFields();
-        return base.SaveChanges();
-    }
-
-    private void ApplyAuditFields()
-    {
-        var now = clock.GetUtcNow();
-
-        foreach (var entry in ChangeTracker.Entries<AuditableEntity>())
-        {
-            if (entry.State == EntityState.Added)
-                entry.Property(nameof(AuditableEntity.CreatedAt)).CurrentValue = now;
-
-            if (entry.State is EntityState.Added or EntityState.Modified)
-                entry.Property(nameof(AuditableEntity.UpdatedAt)).CurrentValue = now;
-        }
-    }
-}
-```
+Code: [`../src/YTTrending.Infrastructure/Persistence/YTTrendingDbContext.cs`](../src/YTTrending.Infrastructure/Persistence/YTTrendingDbContext.cs) — override **cả** `SaveChanges` lẫn `SaveChangesAsync`, gọi `ApplyAuditFields()` duyệt `ChangeTracker.Entries<AuditableEntity>()`, lấy giờ từ `TimeProvider` (`Added` → set `CreatedAt`; `Added`/`Modified` → set `UpdatedAt`).
 
 `entry.Property(...).CurrentValue = now` ghi qua backing field của EF nên **không cần public setter** — đây là cách hoà giải giữa "Domain kín" và "audit tự động".
 
@@ -104,12 +63,7 @@ public class YTTrendingDbContext(DbContextOptions<YTTrendingDbContext> options, 
 
 Không cần gì thêm ngoài việc `TimeProvider` đã có trong DI — EF tự resolve tham số thứ hai của constructor:
 
-```csharp
-services.AddSingleton(TimeProvider.System);
-services.AddDbContext<YTTrendingDbContext>(o => o
-    .UseNpgsql(connectionString)
-    .UseSnakeCaseNamingConvention());
-```
+Đăng ký ở [`AddInfrastructure`](../src/YTTrending.Infrastructure/DependencyInjection.cs): `AddSingleton(TimeProvider.System)` + `AddDbContext(... UseSnakeCaseNamingConvention())` — EF tự resolve tham số `TimeProvider` của constructor.
 
 `dotnet ef migrations add` cũng chạy bình thường: nó lấy `YTTrendingDbContext` qua service provider của `Program.cs`, mà `TimeProvider` đã đăng ký ở đó.
 
@@ -117,13 +71,13 @@ services.AddDbContext<YTTrendingDbContext>(o => o
 
 EF Core có API interception (đăng ký một object vào `DbContextOptions`, EF gọi tại các mốc `SavingChanges` / `SavedChanges` / `SaveChangesFailed`). Nó **không phải** thứ thay thế `ChangeTracker` — interceptor vẫn phải đọc `ChangeTracker` y hệt đoạn trên. Khác biệt duy nhất là đoạn code đó nằm ở file nào.
 
-Chọn override vì đúng nguyên tắc của dự án ([`../docs/architecture.md`](../docs/architecture.md#L7)): *lớp trừu tượng nào không trả lời được "nó chặn được lỗi gì" thì bỏ*. Với **một** DbContext và **một** mối quan tâm lúc save, interceptor không chặn thêm lỗi nào — chỉ thêm 1 file và 2 dòng đăng ký, lại khó tìm hơn (mở `YTTrendingDbContext` không thấy audit đâu). Cùng logic đã dùng để bỏ Repository.
+Chọn override vì đúng nguyên tắc của dự án ([`../docs/architecture.md`](../docs/architecture.md)): *lớp trừu tượng nào không trả lời được "nó chặn được lỗi gì" thì bỏ*. Với **một** DbContext và **một** mối quan tâm lúc save, interceptor không chặn thêm lỗi nào — chỉ thêm 1 file và 2 dòng đăng ký, lại khó tìm hơn (mở `YTTrendingDbContext` không thấy audit đâu). Cùng logic đã dùng để bỏ Repository.
 
 **Khi nào cắt sang interceptor:** khi xuất hiện mối quan tâm **thứ hai** lúc save — soft-delete tự động, domain events, outbox. Lúc đó mỗi thứ một class thay vì một method phình dần. Chuyển tốn ~10 phút vì thân hàm bê nguyên; interceptor còn có sẵn hook `SavedChanges`/`SaveChangesFailed` mà override phải tự try-catch.
 
 #### (5) ⚠️ Ba cạm bẫy
 
-**a) `ExecuteUpdateAsync` / `ExecuteDeleteAsync` không đi qua `SaveChanges`.** Nó dịch thẳng ra một câu SQL, không nạp entity, không có gì trong ChangeTracker để duyệt — nên `ApplyAuditFields()` không bao giờ chạy (interceptor cũng vậy, không phải nhược điểm của cách A). Cleanup Job soft-delete hàng loạt bằng đúng cái này ([`../docs/architecture.md`](../docs/architecture.md#L242)) → phải tự set `updated_at`:
+**a) `ExecuteUpdateAsync` / `ExecuteDeleteAsync` không đi qua `SaveChanges`.** Nó dịch thẳng ra một câu SQL, không nạp entity, không có gì trong ChangeTracker để duyệt — nên `ApplyAuditFields()` không bao giờ chạy (interceptor cũng vậy, không phải nhược điểm của cách A). Cleanup Job soft-delete hàng loạt bằng đúng cái này ([`../docs/architecture.md`](../docs/architecture.md)) → phải tự set `updated_at`:
 
 ```csharp
 await db.Videos
@@ -149,7 +103,7 @@ Dùng `DateTimeOffset`, không `DateTime`. Lý do: `TimeProvider.GetUtcNow()` tr
 
 YouTube Data API có quota và **quota không hồi lại khi retry**. Nếu job tự chạy mỗi lần bấm F5 thì đốt quota vào việc debug.
 
-Giải: `"Jobs": { "Enabled": false }` trong `appsettings.Development.json`, `BackgroundService` đọc cờ này và `return` ngay nếu tắt. Kèm theo đó là endpoint `POST /api/jobs/sync` để chạy tay đúng lúc mình muốn — cũng chính là cách test job mà không chờ timer (đã ngụ ý ở [`../docs/architecture.md`](../docs/architecture.md#L270)).
+Giải: `"Jobs": { "Enabled": false }` trong `appsettings.Development.json`, `BackgroundService` đọc cờ này và `return` ngay nếu tắt. Kèm theo đó là endpoint `POST /api/jobs/sync` để chạy tay đúng lúc mình muốn — cũng chính là cách test job mà không chờ timer (đã ngụ ý ở [`../docs/architecture.md`](../docs/architecture.md)).
 
 ### A6. `FakeYouTubeClient` cho dev
 
@@ -181,7 +135,7 @@ Job chạy lúc 3h sáng, console log biến mất khi tắt máy. Cần log l�
 
 Cột `status` lưu **varchar + `HasConversion<string>()`**, không dùng native Postgres ENUM. Lý do chính (vẫn đúng dù chưa viết test): thêm một giá trị enum vào native ENUM ở Postgres phải viết migration `ALTER TYPE` thủ công — EF không tự sinh. Lý do phụ: khi nào làm test bằng Sqlite in-memory, mapping đặc thù Npgsql (native enum, `jsonb`, `tsvector`) sẽ làm bước tạo schema vỡ; tránh sẵn thì sau này không phải sửa lại configuration.
 
-Chỗ này [`../docs/database.md`](../docs/database.md) đang ghi `ENUM(...)` còn [`../docs/architecture.md`](../docs/architecture.md#L234) ghi `HasConversion<string>()`. **Đã chốt: varchar + `HasConversion<string>()`** — sửa lại `database.md` cho khớp.
+**Đã chốt: varchar + `HasConversion<string>()`** (không native ENUM) — [`../docs/database.md`](../docs/database.md) và [`../docs/architecture.md`](../docs/architecture.md) đã ghi khớp.
 
 ### A12. CORS cho Angular dev server
 
@@ -205,60 +159,7 @@ Những thứ **mọi feature đều đụng tới**. Làm ở base thì viết 
 
 Dashboard có thể tới ~5.000 video (50 channel × 100 video đang track). Trả hết một lần là hỏng cả API lẫn Angular. Và vì FE là project riêng, **hình dạng response phải chốt ngay từ base** — đổi sau là sửa cả hai đầu.
 
-Dưới đây là **code thật**, không phải sketch — bản đầu của mục này lệch 3 chỗ so với code cuối, xem gạch đầu dòng sau khối.
-
-```csharp
-// Application/Common/Models/PagedResult.cs — hình dạng ĐI RA
-public record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount)
-{
-    private readonly int _pageSize = PageSize >= 1
-        ? PageSize
-        : throw new ArgumentOutOfRangeException(nameof(PageSize), PageSize, "PageSize phải ≥ 1.");
-
-    public int PageSize
-    {
-        get => _pageSize;
-        init => _pageSize = value >= 1
-            ? value
-            : throw new ArgumentOutOfRangeException(nameof(value), value, "PageSize phải ≥ 1.");
-    }
-
-    public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
-    public bool HasNext => Page < TotalPages;
-}
-
-// Application/Common/Models/PagedQuery.cs — hình dạng ĐI VÀO, base cho mọi query có phân trang
-public abstract record PagedQuery
-{
-    private const int DefaultPageSize = 20;
-    private const int MaxPageSize = 100;
-
-    private readonly int _page = 1;
-    private readonly int _pageSize = DefaultPageSize;
-
-    public int Page
-    {
-        get => _page;
-        init => _page = value < 1 ? 1 : value;
-    }
-
-    public int PageSize
-    {
-        get => _pageSize;
-        init => _pageSize = value < 1 ? DefaultPageSize : Math.Min(value, MaxPageSize);
-    }
-}
-
-// Application/Common/Extensions/QueryableExtensions.cs
-public static async Task<PagedResult<T>> ToPagedResultAsync<T>(
-    this IQueryable<T> query, int page, int pageSize, CancellationToken ct)
-{
-    var total = await query.CountAsync(ct);
-    var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
-
-    return new PagedResult<T>(items, page, pageSize, total);
-}
-```
+Code thật: [`../src/YTTrending.Application/Common/Models/PagedResult.cs`](../src/YTTrending.Application/Common/Models/PagedResult.cs), [`PagedQuery.cs`](../src/YTTrending.Application/Common/Models/PagedQuery.cs), [`Extensions/QueryableExtensions.cs`](../src/YTTrending.Application/Common/Extensions/QueryableExtensions.cs). Bản đầu của mục này **lệch 3 chỗ** so với code cuối — giữ lại đây vì là cạm bẫy dễ gõ nhầm theo trí nhớ:
 
 **Ba chỗ code thật khác sketch ban đầu** — nếu đọc lại notes rồi gõ theo trí nhớ thì sẽ ra bản cũ:
 
@@ -278,22 +179,13 @@ Bốn lưu ý:
 
 ### A15. Result pattern — bản đầy đủ ✅ (code xong ở Batch 1, 12/08/2026)
 
-Sketch ban đầu ở [`../docs/architecture.md`](../docs/architecture.md#L172) mới có `Result<T>`; **nay đã cập nhật khớp code thật** ở `Application/Common/Models/Error.cs` + `Models/Result.cs` (dời vào `Models/` ở Batch 2 — xem luật xếp folder cuối S3). Ba điểm bổ sung so với sketch đó:
+Bản phác đầu chỉ có `Result<T>`; **code thật** ở [`../src/YTTrending.Application/Common/Models/Result.cs`](../src/YTTrending.Application/Common/Models/Result.cs) + [`Error.cs`](../src/YTTrending.Application/Common/Models/Error.cs) (dời vào `Models/` ở Batch 2 — xem luật xếp folder cuối S3) bổ sung 3 điểm:
 
 **(1) `Result` không generic** — cho command không trả gì (`ToggleChannel`, `DeleteSavedIdea`). Không có thì phải viết `Result<bool>` hoặc `Result<Unit>` khắp nơi, xấu và vô nghĩa.
 
 **(2) `Error` chứa được nhiều lỗi field** — FluentValidation trả về một **danh sách** lỗi theo từng field, còn `Error` hiện tại chỉ có 1 `Message`. `ValidationBehavior` sẽ phải nuốt bớt lỗi, và Angular không hiển thị được lỗi dưới từng ô input.
 
-```csharp
-public record Error(string Code, ErrorType Type, string Message)
-{
-    // thêm: lỗi validation nhiều field
-    public IReadOnlyDictionary<string, string[]>? Fields { get; init; }
-
-    public static Error Validation(IReadOnlyDictionary<string, string[]> fields) =>
-        new("validation.failed", ErrorType.Validation, "Dữ liệu không hợp lệ") { Fields = fields };
-}
-```
+→ Code thật: [`../src/YTTrending.Application/Common/Models/Error.cs`](../src/YTTrending.Application/Common/Models/Error.cs) — `Error` + `Error.Fields` + factory `Validation(fields)`.
 
 **(3) Implicit conversion — đã cân nhắc rồi BỎ.** Bản đầu định thêm `implicit operator Result<T>(T)` để handler viết `return channel.Id;` thay vì `return Result<int>.Success(channel.Id);`. Bỏ vì mất khả năng đọc/grep: dòng `return channel.Id;` không có chữ nào cho biết đang tạo `Result<int>`, và text-search không tìm ra chỗ construct. Handler luôn gọi tường minh `Result<T>.Success(...)`/`Failure(...)`. Xem [`../docs/decisions.md`](../docs/decisions.md) mục *Application — mục 3, Batch 1*.
 

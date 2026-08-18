@@ -26,14 +26,11 @@ Chu kỳ đồng bộ dữ liệu (chọn 1 trong các mốc):
 
 ### Video Tracking Rule
 
-Điều kiện lấy video (Discovery):
-- Video đăng trong `RecentDays` ngày gần nhất.
-- **OR** nằm trong `RecentShortsLimit` Shorts mới nhất của channel.
-- **VÀ phải đạt `MinViewsThreshold`** (chi tiết: [`domain/discovery-engine.md`](domain/discovery-engine.md)).
+`RecentDays`, `RecentShortsLimit`, `MinViewsThreshold` là 3 thông số Discovery dùng — rule đầy đủ (điều kiện OR/AND) ở [`domain/discovery-engine.md`](domain/discovery-engine.md).
 
 ### Archived Retention
 
-Video ở trạng thái ARCHIVED quá `ArchivedRetentionDays` (mặc định 30 ngày) sẽ bị **soft-delete** bởi Cleanup Job — không xóa snapshot lịch sử liên quan. Chi tiết: [`domain/video-lifecycle.md`](domain/video-lifecycle.md), [`domain/background-jobs.md`](domain/background-jobs.md).
+`ArchivedRetentionDays` (mặc định 30 ngày) — video ARCHIVED quá hạn bị Cleanup Job soft-delete (snapshot vẫn giữ). Rule ở [`domain/video-lifecycle.md`](domain/video-lifecycle.md), [`domain/background-jobs.md`](domain/background-jobs.md).
 
 ## Trending Engine Config
 
