@@ -50,16 +50,16 @@ Chưa cần: YouTube API thật, job chạy thật, trending score, test project
 - [x] Migration `InitialCreate` + apply
 - [x] Auto-migrate lúc startup (có cờ bật/tắt)
 
-## 5. API — wiring
+## 5. API — wiring ✅ XONG
 
-- [ ] Serilog + file sink
-- [ ] Pipeline: exception handler → request logging → CORS → controllers
-- [ ] CORS cho Angular dev server
-- [ ] JSON: camelCase + enum trả string
-- [ ] `ResultExtensions` — map `Result` → HTTP status
-- [ ] `GlobalExceptionHandler`
-- [ ] `appsettings.json` đủ section + user-secrets cho connection string & API key
-- [ ] Port cố định trong `launchSettings.json`
+- [x] Serilog + file sink
+- [x] Pipeline: exception handler → request logging → CORS → controllers
+- [x] CORS cho Angular dev server
+- [x] JSON: camelCase + enum trả string
+- [x] `ResultExtensions` — map `Result` → HTTP status
+- [x] `GlobalExceptionHandler`
+- [x] `appsettings.json` đủ section + user-secrets cho connection string & API key
+- [x] Port cố định trong `launchSettings.json`
 
 ## 6. Slice nghiệm thu
 

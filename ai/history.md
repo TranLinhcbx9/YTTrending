@@ -25,6 +25,20 @@
   - **Mục 3 (Application — khối dùng chung) đóng.** `AddInfrastructure()` không đụng tới 3 Options này.
 - Chi tiết: [`setup-base-notes.md`](setup-base-notes.md) mục S3 + A14/A15/A17.
 
+## Nhật ký — mục 5 (API — wiring)
+
+- **Nối `AddApplication(builder.Configuration)` vào `Program.cs`** (cạnh `AddInfrastructure`) — mắt xích hở duy nhất còn lại từ mục 1–4: pipeline behavior (`Logging`/`Validation`) + `ValidateOnStart` của 3 Options **lần đầu thực thi** ở đây (Generic Host).
+- **Pipeline đúng thứ tự A16**: `UseExceptionHandler` → `UseSerilogRequestLogging` → (Development) Swagger + `UseCors` → `MapControllers`. Bỏ `UseHttpsRedirection()`/`UseAuthorization()` — Phase 1 không auth, và HttpsRedirect trả 307 http→https phá preflight CORS của Angular.
+- **`Common/GlobalExceptionHandler.cs`** (`IExceptionHandler`) — bắt exception chưa xử lý, log qua Serilog, trả 500 `{ code, type, message }`. `type` là chuỗi literal `"ServerError"`, **không** thêm member vào `ErrorType` — lý do ghi ở [`../docs/decisions.md`](../docs/decisions.md) mục *API — mục 5*.
+- **`Common/ResultExtensions.cs`** — `ToActionResult()`/`ToActionResult<T>()` + `MapError(Error)` dùng chung (Validation→400, NotFound→404, Conflict→409). Alias `global using IResult = YTTrending.Application.Common.Models.IResult;` gỡ CS0104 với `Microsoft.AspNetCore.Http.IResult` (implicit usings Web SDK) — đúng cảnh báo đã ghi trước ở `current.md`.
+- **Serilog** (Console + File, rolling ngày, giữ 7) + **CORS** (`Cors:AllowedOrigins`, chỉ Development) + **`JsonStringEnumConverter`** (enum trả string).
+- **`appsettings.json`/`.Development.json`** đủ 8 section (`Tracking`/`Trending`/`Jobs` đúng số ở [`../docs/config.md`](../docs/config.md); `Trending` không lặp `MinViewsThreshold`). `Jobs.Enabled` = `true` (base) / `false` (Development, kill-switch A5). `UserSecretsId` đã khởi tạo cho API (A7) — chưa `set` API key thật, để dành mục 6 (`FakeYouTubeClient`).
+- Nghiệm thu qua `/spec-check` (19/08/2026): không có 🔴; 1 🟡 (thiếu `type` ở body 500) đã sửa + chốt ở decisions.md; 1 📄 (wording `MapError(IResult)` → `MapError(Error)`) đã sửa theo code.
+
+✅ Nghiệm thu (tĩnh): `dotnet build` → 0 warning / 0 error (19/08/2026).
+
+⚠️ **Còn nợ verify tay**: `dotnet run` → Swagger mở, log xuất hiện trong `logs/`; cố tình sửa `Tracking:SyncIntervalHours: -1` → app phải chết lúc startup (chứng minh `ValidateOnStart` chạy). Theo dõi ở [`current.md`](current.md).
+
 ## Đã chốt (setup base)
 
 Toàn bộ quyết định setup base đã ghi vào [`../docs/decisions.md`](../docs/decisions.md) mục "Setup base": config từ `appsettings.json`, Postgres local, FE Angular repo riêng, swagger không auto-gen, status VARCHAR, snake_case, Serilog, test hoãn.

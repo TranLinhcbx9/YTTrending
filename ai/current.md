@@ -12,14 +12,16 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 | 2. Domain | ✅ Xong |
 | 3. Application — khối dùng chung | ✅ Xong |
 | 4. Infrastructure — Persistence | ✅ Xong |
-| 5. API — wiring | ⬜ |
+| 5. API — wiring | ✅ Xong |
 | 6. Slice nghiệm thu (`AddChannel`) | ⬜ |
 | 7. Khung background job | ⬜ |
 
 ## Đang làm
 
-- **Bước tiếp theo: mục 5** (API wiring) — `Program.cs` gọi `AddApplication(builder.Configuration)` + `AddInfrastructure(...)`; đây là chỗ pipeline behavior + `ValidateOnStart` **thật sự chạy lần đầu** (Generic Host). `GlobalUsings.cs` của **Application** đã mở khoá `YTTrending.Application.Common` + `.Common.Models` + `.Common.Extensions` (DI file dùng `.Common.Behaviors`/`.Common.Options` qua `using` tại file); bên **API vẫn để comment** — chờ mục 5 (`YTTrending.API.Common` chưa tồn tại).
-  - ⚠️ **Mìn cho mục 5:** khi API mở khoá `.Common.Models` để viết `ResultExtensions`, `IResult` của mình sẽ đụng `Microsoft.AspNetCore.Http.IResult` (nằm trong implicit usings của Web SDK) → CS0104 ambiguous. Gỡ bằng `global using IResult = YTTrending.Application.Common.Models.IResult;` bên API.
+- **Bước tiếp theo: mục 6** (slice nghiệm thu `AddChannel`) — đầu việc + tiêu chí nghiệm thu ở [`setup-base-notes.md`](setup-base-notes.md) mục S6 (`AddChannelCommand`+validator, `GetChannelsQuery`, `FakeYouTubeClient`, `ChannelsController`, seed Dev).
+- **Còn nợ verify tay của mục 5** trước khi coi là đóng hẳn (`dotnet build` đã xanh — 0 warning/0 error, đã tự chạy 19/08/2026):
+  - `dotnet run --project src/YTTrending.API` → Swagger mở ở http://localhost:5118, file log xuất hiện trong `logs/`.
+  - Cố tình sửa `Tracking:SyncIntervalHours: -1` → app phải **chết lúc startup** (chứng minh `ValidateOnStart` chạy), rồi trả lại giá trị đúng (`6`).
 
 ## Lưu ý 🔑 cho bước sau
 
