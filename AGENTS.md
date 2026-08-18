@@ -31,6 +31,7 @@ Công cụ cá nhân theo dõi kênh YouTube Shorts đối thủ, tổng hợp S
 
 ## Cách làm việc
 - Chỉ đọc tài liệu liên quan tới task hiện tại.
+- Sửa / append doc to (`decisions.md`, `setup-base-notes.md`…): Grep tìm mục → Read đúng đoạn (offset), **đừng đọc cả file**; sửa xong **không đọc lại để verify** (harness đã theo dõi edit).
 - Sửa hành vi domain → đọc file tương ứng trong `docs/domain/` trước.
 - Thiết kế chưa rõ → xem [`docs/decisions.md`](docs/decisions.md) trước khi tự nghĩ cách mới.
 - Cần biết đang làm gì / block ở đâu → [`ai/current.md`](ai/current.md) (lịch sử đã xong ở [`ai/history.md`](ai/history.md)).
