@@ -3,7 +3,7 @@ namespace YTTrending.Domain.Entities;
 public class VideoMetricSnapshot
 {
     /// <summary>BIGINT — bảng này tăng nhanh nhất hệ thống.</summary>
-    public long Id { get; set; }
+    public int Id { get; set; }
 
     public required int VideoId { get; set; }
 
