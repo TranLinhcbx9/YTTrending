@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;   // MigrateAsync
 using Serilog;                         // UseSerilog / UseSerilogRequestLogging
+using YTTrending.Application.Common.Interfaces;   // IChannelRepository / IUnitOfWork cho seed
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,7 +36,16 @@ var app = builder.Build();
 if (app.Configuration.GetValue<bool>("Database:AutoMigrate"))
 {
     using var scope = app.Services.CreateScope();
-    await scope.ServiceProvider.GetRequiredService<YTTrendingDbContext>().Database.MigrateAsync();
+    var db = scope.ServiceProvider.GetRequiredService<YTTrendingDbContext>();
+    await db.Database.MigrateAsync();
+
+    // Seed dữ liệu giả chỉ ở Development, sau khi migrate xong — qua Repository, không đụng DbContext thẳng
+    if (app.Environment.IsDevelopment())
+    {
+        var channels = scope.ServiceProvider.GetRequiredService<IChannelRepository>();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await DevDataSeeder.SeedAsync(channels, uow);
+    }
 }
 
 app.UseExceptionHandler();          // đặt đầu pipeline để gom mọi lỗi phía sau

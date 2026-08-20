@@ -16,12 +16,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Controllers\" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\YTTrending.Application\YTTrending.Application.csproj" />
     <ProjectReference Include="..\YTTrending.Infrastructure\YTTrending.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
+  

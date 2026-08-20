@@ -481,7 +481,7 @@ dotnet ef database update -p src/YTTrending.Infrastructure -s src/YTTrending.API
 Slice mỏng nhất chứng minh cả 4 layer thông nhau.
 
 - [ ] `Features/Channels/Commands/AddChannel/` — Command + Handler + Validator
-- [ ] `Features/Channels/Queries/GetChannels/` — dùng `PagedQuery` + `ToPagedResultAsync` để nghiệm thu luôn khối paging (A14)
+- [ ] `Features/Channels/Queries/GetChannels/` — dùng `PagedQuery` (A14). Paging thật đi qua `ChannelRepository.GetPagedAsync`, **không phải** `ToPagedResultAsync` trực tiếp — Repository trả list đã materialize chứ không phải `IQueryable`, xem [`../docs/decisions.md`](../docs/decisions.md) mục 6 (Repository/UnitOfWork là pattern chuẩn của dự án).
 - [ ] `Infrastructure/YouTube/FakeYouTubeClient.cs` (A6)
 - [ ] `Controllers/ChannelsController.cs` — `POST` + `GET` (paged)
 
@@ -489,7 +489,7 @@ Slice mỏng nhất chứng minh cả 4 layer thông nhau.
 - POST qua Swagger → 200 + row trong `channels`, `created_at`/`updated_at` tự điền (chứng minh interceptor chạy — A4)
 - POST lại đúng ID đó → **409 Conflict** (Result pattern map status đúng)
 - POST rỗng → **400** kèm `fields` chỉ rõ ô nào sai (ValidationBehavior + `Error.Fields` — A15)
-- GET `?page=1&pageSize=2` → đúng hình dạng `PagedResult`; `?pageSize=999999` → bị cap về 20 (A14)
+- GET `?page=1&pageSize=2` → đúng hình dạng `PagedResult`; `?pageSize=999999` → bị cap về **100** (`MaxPageSize`, A14)
 
 ---
 

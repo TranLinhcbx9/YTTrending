@@ -12,7 +12,7 @@
 | **API** | Application + Infrastructure | ASP.NET, Swashbuckle, Serilog | `using` DbContext/entity EF trong Controller |
 
 - Ranh giới thật (compiler không chặn, phải tự giữ): **Controller chỉ biết `ISender` + DTO**, không chạm `YTTrendingDbContext`.
-- Interface Application expose ra ngoài **chỉ 2**: `IYTTrendingDbContext`, `IYouTubeClient`. Không thêm Repository.
+- Interface Application expose ra ngoài: `IYouTubeClient` + Repository pattern (`IRepository<T>` base, repository riêng theo aggregate — vd `IChannelRepository`) + `IUnitOfWork` — pattern chuẩn từ mục 6 (xem [`decisions.md`](decisions.md)).
 
 ## 2. Style & format — do `.editorconfig` / `Directory.Build.props` ép
 
@@ -34,7 +34,7 @@ Chỉ nhắc, **không chép lại rule**: file-scoped namespace · `using` ngo�
 
 - **Async** → hậu tố `Async`; **`CancellationToken`** → luôn đặt tên `ct`, là tham số cuối.
 - **Boolean** → tiền tố `Is`/`Has`/`Can`: `IsSuccess`, `IsEnabled`, `HasNext`.
-- **Acronym/tên riêng** viết như một từ thường: `Id`, `Url`, `Youtube` (không `ID`/`URL`/`YouTube`). Ngoại lệ giữ nguyên: prefix dự án `YT` (`YTTrending`, `IYTTrendingDbContext`) và brand `IYouTubeClient`.
+- **Acronym/tên riêng** viết như một từ thường: `Id`, `Url`, `Youtube` (không `ID`/`URL`/`YouTube`). Ngoại lệ giữ nguyên: prefix dự án `YT` (`YTTrending`, `YTTrendingDbContext`) và brand `IYouTubeClient`.
 - **Hậu tố theo vai trò**: `...Command`/`...Query` (request), `...CommandHandler`/`...QueryHandler`, `...CommandValidator`, `...Dto` (DTO ra FE), `...Options` (config), `...Behavior` (pipeline), `...Configuration` (EF mapping).
 - **Tên file = tên type** (`Video.cs`); gom nhiều type cùng một hợp đồng vào 1 file khi hợp lý (`YouTubeModels.cs`, `Result.cs` chứa `IResult`+`Result`+`Result<T>`).
 
@@ -47,8 +47,8 @@ Chỉ nhắc, **không chép lại rule**: file-scoped namespace · `using` ngo�
 ## 5. Handler (CQRS qua MediatR 12.x)
 
 - Handler **LUÔN** trả `Result` / `Result<T>` — **ràng buộc thật**: `ValidationBehavior` ràng `where TResponse : IResult`; DI .NET 7+ **lặng lẽ bỏ qua** behavior không thỏa → trả kiểu khác thì validate không chạy mà không báo.
-- **Command (ghi)**: dùng `IYTTrendingDbContext` thẳng; đổi trạng thái video qua `VideoStateRules`; **1 `SaveChangesAsync`/handler** (không `TransactionBehavior`).
-- **Query (đọc)**: `IYTTrendingDbContext` thẳng (không Repository); `.AsNoTracking()`; `.Select(...)` thẳng vào DTO, không load entity thừa.
+- **Command (ghi)**: qua Repository tương ứng + `IUnitOfWork.SaveChangesAsync()` — pattern chuẩn từ mục 6, xem [`decisions.md`](decisions.md); đổi trạng thái video qua `VideoStateRules`; **1 `SaveChangesAsync`/handler** (không `TransactionBehavior`).
+- **Query (đọc)**: qua Repository tương ứng; implementation `.AsNoTracking()`; map thẳng vào DTO, không load entity thừa.
 - Duplicate-check theo `YoutubeVideoId`/`YoutubeChannelId` (unique index), **không** theo title/thumbnail.
 
 ## 6. Result & Error — ranh giới lỗi

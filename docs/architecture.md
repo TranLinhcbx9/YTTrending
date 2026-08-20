@@ -27,7 +27,7 @@ YTTrending.API             → Composition root: Controllers, DI wiring, appsett
       ↓
 YTTrending.Infrastructure  → EF Core DbContext, YouTube API client, Background Jobs
       ↓
-YTTrending.Application     → Command/Query handler, interface (IYTTrendingDbContext, IYouTubeClient), Options
+YTTrending.Application     → Command/Query handler, interface (Repository pattern + IUnitOfWork, IYouTubeClient), Options
       ↓
 YTTrending.Domain          → Entities, Enums, invariant — không phụ thuộc project nào khác
 ```
@@ -43,7 +43,7 @@ YTTrending.Domain          → Entities, Enums, invariant — không phụ thu�
 
 > **Vì sao API vẫn reference Infrastructure?** Vì API là composition root — không thể gọi `services.AddInfrastructure()` mà không "thấy" project đó. Ranh giới thật nằm ở chỗ: **Controller chỉ được biết `ISender` và DTO**, tuyệt đối không chạm `YTTrendingDbContext`. Đây là quy ước, compiler không chặn được.
 
-> **Application vẫn phụ thuộc EF Core — và điều đó ổn.** `IYTTrendingDbContext` expose `DbSet<T>`, còn `FirstOrDefaultAsync`/`AsNoTracking` là extension của EF. Nói "Application không biết EF" là tự lừa mình. Ranh giới thật là **provider**: đổi Postgres → SQL Server chỉ động vào Infrastructure.
+> **Application vẫn phụ thuộc EF Core — và điều đó ổn.** Lý do hiện tại: `IQueryable<T>` + `CountAsync`/`ToListAsync` (EF async LINQ) trong `QueryableExtensions.cs` — không còn qua `IYTTrendingDbContext` (đã xoá, xem [`decisions.md`](decisions.md) mục 6). Ranh giới thật là **provider**: đổi Postgres → SQL Server chỉ động vào Infrastructure.
 
 ## Cấu trúc thư mục
 
@@ -55,7 +55,7 @@ src/
 │
 ├── YTTrending.Application/
 │   ├── Common/
-│   │   ├── Interfaces/     IYTTrendingDbContext, IYouTubeClient
+│   │   ├── Interfaces/     IRepository<T>/IChannelRepository/IUnitOfWork, IYouTubeClient
 │   │   ├── Behaviors/      LoggingBehavior, ValidationBehavior
 │   │   ├── Options/        TrackingOptions, TrendingOptions
 │   │   └── Result.cs, Error.cs
@@ -100,11 +100,11 @@ Một feature = một folder, chứa Command/Query + Handler + Validator cạnh 
   - Discovery Engine — [`domain/discovery-engine.md`](domain/discovery-engine.md)
   - Trending Engine — [`domain/trending-engine.md`](domain/trending-engine.md)
   - Job orchestration — [`domain/background-jobs.md`](domain/background-jobs.md)
-- Khai báo interface ra ngoài: **chỉ 2 cái** — `IYTTrendingDbContext`, `IYouTubeClient`.
+- Khai báo interface ra ngoài: `IYouTubeClient` + Repository pattern (`IRepository<T>` base, repository riêng theo aggregate như `IChannelRepository`) + `IUnitOfWork` — pattern chuẩn từ mục 6, xem [`decisions.md`](decisions.md).
 - Bind + validate Options — xem [`config.md`](config.md).
 
 ### YTTrending.Infrastructure
-- `YTTrendingDbContext : DbContext, IYTTrendingDbContext` + Fluent API configurations + migrations.
+- `YTTrendingDbContext : DbContext` + Fluent API configurations + migrations.
 - `YouTubeClient` (typed `HttpClient` + resilience handler).
 - 3 `BackgroundService` cho Sync / Metrics / Cleanup.
 - `DependencyInjection.cs`: một extension `AddInfrastructure(config)` gom toàn bộ đăng ký.
@@ -117,23 +117,21 @@ Một feature = một folder, chứa Command/Query + Handler + Validator cạnh 
 
 ### Command (luồng ghi) — qua Domain
 
-Check nghiệp vụ → gọi `IYouTubeClient`/`IYTTrendingDbContext` → đổi trạng thái qua `VideoStateRules` → `SaveChangesAsync` → trả `Result<T>`. Ví dụ `AddChannelCommand`: trùng channel → `Error.Conflict`, không tìm thấy → `Error.NotFound`, ok → `Result<int>.Success(channel.Id)`.
+Check nghiệp vụ → gọi `IYouTubeClient`/Repository tương ứng → đổi trạng thái qua `VideoStateRules` → `SaveChangesAsync` (qua `IUnitOfWork`) → trả `Result<T>`. Ví dụ `AddChannelCommand`: trùng channel → `Error.Conflict`, không tìm thấy → `Error.NotFound`, ok → `Result<ChannelDto>.Success(...)`.
 
-### Query (luồng đọc) — thẳng DbContext, không Repository
+### Query (luồng đọc) — qua Repository
 
-`db.Videos.AsNoTracking().WhereIf(...).Select(v => new XxxDto(...)).ToListAsync(ct)` — projection thẳng vào DTO, không load entity thừa, không Repository.
+Đọc qua repository tương ứng (vd `IChannelRepository.GetPagedAsync`); implementation `.AsNoTracking()`, map thẳng vào DTO — không load entity thừa.
 
-→ Rule handler đầy đủ: [`coding-convention.md`](coding-convention.md) mục 5. Code slice đầu tiên sẽ ở `src/YTTrending.Application/Features/` (mục 6 — [`../ai/setup-base.md`](../ai/setup-base.md)).
+→ Rule handler đầy đủ: [`coding-convention.md`](coding-convention.md) mục 5. Code slice đầu tiên ở `src/YTTrending.Application/Features/Channels/` (mục 6 — [`../ai/setup-base.md`](../ai/setup-base.md)).
 
-### Vì sao KHÔNG có Repository
+### Repository + UnitOfWork — pattern chuẩn của dự án
 
-Bản trước của doc này khai `IChannelRepository`, `IVideoRepository`, `IMetricsSnapshotRepository`, `ISavedIdeaRepository` — **đã bỏ hết**. Lý do:
+Chốt lại ở mục 6 (21/08/2026), **đảo ngược quyết định "bỏ Repository" ban đầu — cho toàn dự án**, không riêng Channel. Bản trước của doc này (trước mục 6) từng bỏ hẳn `IChannelRepository`/`IVideoRepository`/`IMetricsSnapshotRepository`/`ISavedIdeaRepository`; giờ Repository (`IRepository<T>` base + repository riêng theo aggregate) + `IUnitOfWork` là cách chuẩn. `IChannelRepository`+`IUnitOfWork` (Channel) là implementation đầu tiên; aggregate khác có repository riêng khi tới lượt làm. Lý do đảo lại + đánh đổi đã biết (paging không tái dùng được `ToPagedResultAsync`) — xem [`decisions.md`](decisions.md) mục 6, không nhắc lại chi tiết ở đây.
 
-- Repository tồn tại để đổi được nguồn dữ liệu. Ở đây chỉ có **một** DB duy nhất, vĩnh viễn.
-- `DbSet<T>` + `IQueryable` đã là Repository + Unit of Work rồi. Bọc thêm một lớp chỉ để `return _db.Videos.Where(...)` là gián tiếp thừa.
-- Query cần shape linh hoạt (dashboard nhiều filter, chi tiết video kèm chart) — bọc Repository sẽ đẻ ra `GetByChannelAndScoreAndDateRange...` vô tận.
+`IYTTrendingDbContext` **đã xoá** (21/08/2026) — hết consumer sau khi Repository thay thế hoàn toàn; repository implementation inject thẳng class cụ thể `YTTrendingDbContext`.
 
-`IYouTubeClient` thì **giữ**, vì nó thật sự chặn được thứ có ích: test handler không cần gọi mạng thật.
+`IYouTubeClient` thì **giữ nguyên vai trò riêng** — gọi API ngoài, không phải data access nội bộ, nên không nằm trong phạm vi đảo quyết định này.
 
 ## Result Pattern
 

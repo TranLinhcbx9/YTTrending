@@ -6,7 +6,7 @@
 Công cụ cá nhân theo dõi kênh YouTube Shorts đối thủ, tổng hợp Shorts gần đây, phát hiện video tăng trưởng tốt để tham khảo ý tưởng content. → [`docs/overview.md`](docs/overview.md)
 
 ## Stack & kiến trúc
-.NET 8, 4 tầng: **Domain / Application / Infrastructure / API**. CQRS bằng **MediatR** (bỏ Repository) + pipeline behaviors (Logging, Validation). **EF Core 8 + Postgres** (snake_case). **Result pattern** — không ném exception cho luồng nghiệp vụ. Job nền bằng **BackgroundService**, thời gian qua **TimeProvider**. FE **Angular** (repo riêng).
+.NET 8, 4 tầng: **Domain / Application / Infrastructure / API**. CQRS bằng **MediatR** + Repository/UnitOfWork (đảo lại quyết định ban đầu, giờ là pattern chuẩn — xem [`docs/decisions.md`](docs/decisions.md)) + pipeline behaviors (Logging, Validation). **EF Core 8 + Postgres** (snake_case). **Result pattern** — không ném exception cho luồng nghiệp vụ. Job nền bằng **BackgroundService**, thời gian qua **TimeProvider**. FE **Angular** (repo riêng).
 → Chi tiết tầng/phụ thuộc: [`docs/architecture.md`](docs/architecture.md) · convention code: [`docs/coding-convention.md`](docs/coding-convention.md)
 
 ## Invariant (nhớ khi sửa code)

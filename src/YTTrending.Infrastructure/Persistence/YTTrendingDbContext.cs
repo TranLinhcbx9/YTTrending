@@ -1,7 +1,7 @@
 namespace YTTrending.Infrastructure.Persistence;
 
 public class YTTrendingDbContext(DbContextOptions<YTTrendingDbContext> options, TimeProvider clock)
-    : DbContext(options), IYTTrendingDbContext
+    : DbContext(options)
 {
     public DbSet<Channel> Channels => Set<Channel>();
     public DbSet<Video> Videos => Set<Video>();

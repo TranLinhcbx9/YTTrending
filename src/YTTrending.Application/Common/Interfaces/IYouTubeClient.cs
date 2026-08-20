@@ -1,7 +1,8 @@
 namespace YTTrending.Application.Common.Interfaces;
 
 /// <summary>
-/// Một trong 2 interface duy nhất Application expose ra ngoài (cùng IYTTrendingDbContext).
+/// Interface cho gọi API ngoài (YouTube) — tách biệt khỏi Repository pattern dùng cho data access nội bộ,
+/// xem docs/decisions.md mục 6.
 /// Chữ ký còn là TẠM — sửa khi làm Discovery thật, xem docs/decisions.md mục Batch 4.
 /// </summary>
 public interface IYouTubeClient
