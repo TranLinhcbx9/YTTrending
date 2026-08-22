@@ -14,6 +14,7 @@ Công cụ cá nhân theo dõi kênh YouTube Shorts đối thủ, tổng hợp S
 - **VideoId** (YouTube cấp) là khóa duy nhất để so sánh video — không dùng title/thumbnail (có thể bị đổi).
 - **ARCHIVED là trạng thái cuối** — không có đường quay lại TRACKING.
 - Phase 1 **single-user, không login / không AI / không đa nền tảng** → [`docs/out-of-scope.md`](docs/out-of-scope.md).
+- **Vừa làm vừa học**: ưu tiên pattern gần thực tế doanh nghiệp khi có đánh đổi hợp lý (phục vụ phỏng vấn / đi làm sau này), không chỉ tối giản cho single-user → [`docs/decisions.md`](docs/decisions.md).
 - **SSOT — mỗi fact một chủ**: "cái gì" ở [`docs/coding-convention.md`](docs/coding-convention.md), "tại sao / đã bỏ gì" ở [`docs/decisions.md`](docs/decisions.md), **code ở `src/`** (docs không nhúng code), số config ở [`docs/config.md`](docs/config.md), schema ở [`docs/database.md`](docs/database.md). Sửa docs phải giữ nguyên tắc này.
 
 ## Lệnh & quy ước
