@@ -119,6 +119,21 @@
 - **Naming Handler/Validator đổi lại đúng hậu tố đã chốt** ([`coding-convention.md`](coding-convention.md) mục 5, `...CommandHandler`/`...QueryHandler`/`...CommandValidator`): `AddChannelHandler`→`AddChannelCommandHandler`, `AddChannelValidator`→`AddChannelCommandValidator`, `GetChannelsHandler`→`GetChannelsQueryHandler`, `GetChannelByIdHandler`→`GetChannelByIdQueryHandler`, `UpdateChannelHandler`→`UpdateChannelCommandHandler`, `UpdateChannelValidator`→`UpdateChannelCommandValidator`. `DeleteChannelCommandHandler` đã đúng từ đầu, không đổi. `GetChannelById` cũng đã tách sang folder riêng `Queries/GetChannelById/` cho khớp "1 feature = 1 folder" (`coding-convention.md` mục 4).
 - `architecture.md`, `coding-convention.md`, `AGENTS.md` đã sửa khớp — Repository/UnitOfWork ghi là pattern chuẩn, không còn là ngoại lệ Channel.
 
+### Nguyên tắc chung — vừa làm vừa học, ưu tiên pattern gần doanh nghiệp (chốt 22/08/2026)
+
+- **Dự án có mục tiêu kép**: vừa là công cụ cá nhân (Phase 1, xem `overview.md`), vừa là nơi luyện pattern gần thực tế doanh nghiệp — phục vụ phỏng vấn/đi làm sau này. Khi có đánh đổi hợp lý giữa "tối giản cho single-user" và "gần thực tế doanh nghiệp hơn", ưu tiên vế sau — miễn không vi phạm `out-of-scope.md` (Phase 1 single-user/không login/AI/đa nền tảng) và không rơi vào over-engineering vô nghĩa (thêm pattern không giải quyết vấn đề thật, chỉ để có mặt). Đã ghi thành invariant ở `AGENTS.md`.
+- Áp dụng lần đầu ở mục *API — Error response chuyển sang ProblemDetails* ngay dưới đây.
+
+### API — Error response chuyển sang RFC 7807 ProblemDetails, không dùng BaseResponse<T> (chốt 22/08/2026)
+
+- **Đổi hợp đồng JSON lỗi từ `Error { code, type, message, fields }` tự chế sang `ProblemDetails`/`ValidationProblemDetails` chuẩn RFC 7807** — convention chính thức ASP.NET Core (.NET 6+), fix luôn lệch shape có sẵn giữa lỗi nghiệp vụ (qua `Result`) và lỗi model-binding tự động của `[ApiController]` (vốn đã tự trả `ValidationProblemDetails` từ trước, không ai chặn). Success response (raw DTO / `PagedResult<T>`) không đổi.
+- **Loại phương án `BaseResponse<T>` bọc cả success/error** (`{success,data,error}`): không phải chuẩn framework đẩy (ASP.NET Web API 2/Java Spring cũ hơn); muốn nhánh exception cùng shape thì phải cấp `Error` cho nó → phá ranh giới đã chốt ở mục *API — mục 5* (19/08/2026: "KHÔNG thêm `ServerError` vào `ErrorType`"); bọc `PagedResult` thêm 1 lớp vô nghĩa; `Result` (void, 204) mất lý do tồn tại nếu mọi thành công đều cần body.
+- **`ResultExtensions.MapError` (private, không phải extension thật) tách thành `Error.ToProblemDetails()`** — extension method thật trên `Error`, cùng kiểu đặt tên `ToX()` với `ToActionResult()` đã có, đúng nghĩa "Extensions" của file. Phần glue còn lại (`ObjectResult` + status code) là private helper thường.
+- **`GlobalExceptionHandler` đổi sang dùng `IProblemDetailsService`** (đã đăng ký sẵn từ `AddProblemDetails()` ở mục 5, trước đó chỉ dùng để `UseExceptionHandler()` không rỗng) thay vì tự viết object JSON tay — vẫn giữ `code="server.error"` viết cứng literal, không đụng `Error`/`ErrorType`, đúng ranh giới đã chốt.
+- **Cân nhắc và loại** `AddProblemDetails(options => options.CustomizeProblemDetails = ...)` để gắn `traceId` toàn app — verify qua Microsoft Learn thì cơ chế này chỉ chắc chắn áp dụng cho response đi qua `IProblemDetailsService` (nhánh exception), không áp dụng cho `ProblemDetails` tự build trong `MapError`/`ToProblemDetails()`, và không chắc áp dụng cho lỗi model-binding tự động (đi qua `ProblemDetailsFactory` — cơ chế tách riêng). Lợi ích hẹp (đúng 1/4 nhánh, khó trigger/test) trên app một service/một dev/chưa có test suite; `UseSerilogRequestLogging()` đã tự correlate theo `TraceIdentifier` ở tầng log. Không thêm.
+- **Lỗi model-binding tự động của `[ApiController]` vẫn thiếu `code`** (đi qua `ProblemDetailsFactory`, không qua `MapError`) — biết và **chấp nhận** làm gap, không viết thêm `ProblemDetailsFactory` riêng cho edge case hiếm (JSON sai định dạng trước khi vào handler).
+- FE (Angular, repo riêng) phải tự sửa phần đọc lỗi: key field đổi từ `fields` → `errors` (theo `ValidationProblemDetails` chuẩn).
+
 ## Pending (chưa chốt)
 
 ### 1. Snapshot frequency tách riêng khỏi Sync Interval?

@@ -57,7 +57,7 @@ Chỉ nhắc, **không chép lại rule**: file-scoped namespace · `using` ngo�
 - Tạo `Result` **tường minh**: `Result<int>.Success(id)` / `.Failure(error)` — không implicit conversion.
 - `Result<T>.Value` khi đã fail → **ném** `InvalidOperationException`, không trả `default`.
 - Command không có giá trị trả → `Result` (không `Result<bool>` vô nghĩa).
-- `Error` mang `ErrorType` (Validation/NotFound/Conflict) → API map HTTP **một chỗ** (`ResultExtensions.ToActionResult`).
+- `Error` mang `ErrorType` (Validation/NotFound/Conflict) → API map HTTP **một chỗ** (`ResultExtensions.ToActionResult`), trả về **`ProblemDetails`/`ValidationProblemDetails`** (RFC 7807) qua extension `Error.ToProblemDetails()` — không serialize `Error` thẳng ra JSON.
 - Invariant sai (`VideoStateRules`) → `InvalidOperationException`, **không** tạo `DomainException` riêng.
 
 ## 7. Query đọc & phân trang
