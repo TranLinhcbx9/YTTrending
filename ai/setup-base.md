@@ -63,11 +63,11 @@ Chưa cần: YouTube API thật, job chạy thật, trending score, test project
 
 ## 6. Slice nghiệm thu
 
-- [ ] `AddChannelCommand` + validator
-- [ ] `GetChannelsQuery` (có paging)
-- [ ] `FakeYouTubeClient`
-- [ ] `ChannelsController`
-- [ ] Seed data cho Development
+- [x] `AddChannelCommand` + validator
+- [x] `GetChannelsQuery` (có paging)
+- [x] `FakeYouTubeClient`
+- [x] `ChannelsController`
+- [x] Seed data cho Development
 
 ## 7. Khung background job
 

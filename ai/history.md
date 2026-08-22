@@ -37,7 +37,21 @@
 
 ✅ Nghiệm thu (tĩnh): `dotnet build` → 0 warning / 0 error (19/08/2026).
 
-⚠️ **Còn nợ verify tay**: `dotnet run` → Swagger mở, log xuất hiện trong `logs/`; cố tình sửa `Tracking:SyncIntervalHours: -1` → app phải chết lúc startup (chứng minh `ValidateOnStart` chạy). Theo dõi ở [`current.md`](current.md).
+✅ ~~Còn nợ verify tay~~ — **đã đóng ở mục 6** (22/08/2026): Swagger mở, log xuất hiện trong `logs/`, crash-test `ValidateOnStart` pass. Chi tiết ở mục *Nhật ký — mục 6* ngay dưới đây.
+
+## Nhật ký — mục 6 (Slice nghiệm thu — AddChannel)
+
+- **Code đã có sẵn từ trước** (batch "adopt repository pattern and add channel feature") — `AddChannelCommand`+Handler+Validator, `GetChannelsQuery`+Handler, `ChannelsController` (5 action), `ChannelRepository`, `FakeYouTubeClient`, `DevDataSeeder`. Việc mục 6 còn lại không phải viết thêm mà là **verify thật qua HTTP** — code compile xanh không đồng nghĩa chạy đúng.
+- **DI đã đúng** — `IChannelRepository`→`ChannelRepository`, `IUnitOfWork`→`UnitOfWork` (`AddScoped`), `IYouTubeClient`→`FakeYouTubeClient` (`AddSingleton`, gate `YouTube:UseFake` mặc định `true`) ở `Infrastructure/DependencyInjection.cs`; `AddApplication()`/`AddInfrastructure()` confirm được gọi ở `Program.cs`. Handler/Validator không cần đăng ký tay — tự động qua assembly scanning của MediatR/FluentValidation; Repository/Client thì không ai scan, thiếu dòng `AddScoped`/`AddSingleton` là vỡ ngay lúc `Build()` (Development validate service graph lúc khởi động).
+- **Sửa tiêu chí nợ-verify cũ trước khi test** — key lỗi đổi từ `fields` → `errors` theo quyết định ProblemDetails 22/08/2026 (`decisions.md`); tiêu chí cũ ghi theo hợp đồng lỗi trước đó, test theo tiêu chí cũ sẽ tưởng nhầm là sai trong khi code đã đúng.
+- **Đóng nợ verify từ mục 2** (`required` + EF Core 8 materialization) — POST `/api/channels {"youtubeChannelId":"UCtestNew001"}` → tạo row id 5 → GET `/api/channels/5` đọc lại đúng toàn bộ field `required`.
+- **Đóng nợ verify init-accessor** — cả `AddChannelCommand.YoutubeChannelId` (body) lẫn `PagedQuery.PageSize` (query string, có logic clamp `value < 1 ? Default : Math.Min(value, 100)`) đều bị model binding ghi đúng: `?pageSize=999999` → response thật trả về `pageSize:100`.
+- **`PagedResult` shape + thứ tự trang ổn định** — 4 channel seed sẵn, `?page=1&pageSize=2` → id 1,2; `?page=2&pageSize=2` → id 3,4 — không trùng item nào.
+- **`FakeYouTubeClient` dùng được thật** — id bắt đầu `UC` → tạo thành công (200); id khác → 404 `channel.notFound`; id đã tồn tại → 409 `channel.exists`.
+- **`ValidationBehavior` + `ValidationProblemDetails`** — POST `{"youtubeChannelId":""}` → 400, `errors.youtubeChannelId` camelCase, `code:"validation.failed"`. Lưu ý: POST `{}` (thiếu hẳn field, khác với rỗng) đi qua nhánh khác — model-binding tự động của `[ApiController]` trước khi vào MediatR, không qua `ValidationBehavior` — đúng gap đã biết ở `decisions.md` (thiếu `code`, key PascalCase). Hai case dễ tưởng là một, phải test riêng từng case.
+- **Nợ verify tay còn lại của mục 5 — đóng luôn** — Swagger `/swagger/index.html` → 200; log ghi vào `src/YTTrending.API/logs/log-20260822.txt`; cố tình sửa `Tracking:SyncIntervalHours: -1` → `OptionsValidationException`/"Hosting failed to start" đúng như `ValidateOnStart` hứa, trả lại `6` + chạy lại sạch ngay sau.
+
+✅ Nghiệm thu: `dotnet build` → 0 warning/0 error · toàn bộ case trên chạy qua `curl` thật trên `dotnet run`, không phải suy đoán từ đọc code (22/08/2026).
 
 ## Đã chốt (setup base)
 
@@ -82,7 +96,7 @@ Toàn bộ quyết định setup base đã ghi vào [`../docs/decisions.md`](../
 
 ✅ Nghiệm thu: `dotnet build` → 0 warning / 0 error · grep `Entities/` không còn method/ctor nào · probe object initializer + `VideoStateRules` → compile sạch · probe `new Video { Title = "x" }` → **CS9035** ×9 field bắt buộc, `required` có hiệu lực.
 
-⚠️ **Còn nợ verify:** `required` + EF Core 8 materialization — gom vào mục [Nợ verify](current.md#nợ-verify-chốt-ở-mục-6) ở `current.md`. Về lý thuyết EF ghi qua backing field nên không dính check compile-time. Mục 4 đã chứng minh được **một nửa**: model build + migration sinh đúng, nhưng chưa có đường ghi/đọc thật nào nên **chưa đóng** — dời mốc sang **mục 6 (`AddChannel`)**: POST qua Swagger → có row trong DB → GET đọc lại được. Vỡ thì bỏ `required`, không ảnh hưởng quyết định anemic.
+⚠️ ~~Còn nợ verify:~~ `required` + EF Core 8 materialization — gom vào mục [Nợ verify](current.md#nợ-verify-chốt-ở-mục-6) ở `current.md`. Về lý thuyết EF ghi qua backing field nên không dính check compile-time. Mục 4 đã chứng minh được **một nửa**: model build + migration sinh đúng, nhưng chưa có đường ghi/đọc thật nào nên **chưa đóng** — dời mốc sang **mục 6 (`AddChannel`)**: POST qua Swagger → có row trong DB → GET đọc lại được. Vỡ thì bỏ `required`, không ảnh hưởng quyết định anemic. **→ Đã đóng ở mục 6 (22/08/2026): không vỡ, `required` giữ nguyên** — xem *Nhật ký — mục 6*.
 
 ### Mục 4 — Infrastructure / Persistence ✅
 
