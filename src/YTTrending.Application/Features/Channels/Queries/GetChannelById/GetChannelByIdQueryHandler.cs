@@ -8,7 +8,7 @@ public sealed class GetChannelByIdQueryHandler(IChannelRepository channels) : IR
     {
         var channel = await channels.GetByIdAsync(q.Id, ct);
         if (channel is null)
-            return Result<ChannelDto>.Failure(Error.NotFound("channel.notFound", $"Channel with ID {q.Id} not found."));
+            return Result<ChannelDto>.Failure(Error.NotFound(ChannelErrors.NotFound, $"Channel with ID {q.Id} not found."));
         return Result<ChannelDto>.Success(channel.ToDto());
     }
 }

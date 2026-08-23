@@ -8,7 +8,7 @@ public sealed class DeleteChannelCommandHandler (IChannelRepository channels, IU
     {
         var channel = await channels.GetByIdAsync(cmd.Id, ct);
         if (channel is null)
-            return Result.Failure(Error.NotFound("channel.notFound", "Không tìm channel với id được cung cấp."));
+            return Result.Failure(Error.NotFound(ChannelErrors.NotFound, "Không tìm channel với id được cung cấp."));
 
         channels.Delete(channel);
         await uow.SaveChangesAsync(ct);
