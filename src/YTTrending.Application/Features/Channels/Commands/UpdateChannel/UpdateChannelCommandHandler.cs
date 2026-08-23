@@ -9,7 +9,7 @@ public class UpdateChannelCommandHandler(IChannelRepository channels, IUnitOfWor
     {
         var channel = await channels.GetByIdAsync(cmd.Id, ct);
         if (channel is null)
-            return Result<ChannelDto>.Failure(Error.NotFound("channel.notFound", "Không tìm channel với id được cung cấp."));
+            return Result<ChannelDto>.Failure(Error.NotFound(ChannelErrors.NotFound, "Không tìm channel với id được cung cấp."));
 
         channel.Name = cmd.Name;          // EF tự phát hiện thay đổi
         channel.Url = cmd.Url;

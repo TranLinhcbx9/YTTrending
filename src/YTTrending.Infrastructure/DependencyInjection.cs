@@ -16,6 +16,7 @@ public static class DependencyInjection
             .UseSnakeCaseNamingConvention());
 
         services.AddScoped<IChannelRepository, ChannelRepository>();
+        services.AddScoped<IVideoRepository, VideoRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         // Client YouTube: base chỉ có Fake; cờ "YouTube:UseFake" (mặc định true) để sau cắm client thật vào else

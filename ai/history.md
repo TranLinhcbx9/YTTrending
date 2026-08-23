@@ -53,6 +53,17 @@
 
 ✅ Nghiệm thu: `dotnet build` → 0 warning/0 error · toàn bộ case trên chạy qua `curl` thật trên `dotnet run`, không phải suy đoán từ đọc code (22/08/2026).
 
+## Nhật ký — Video feature (Query slice)
+
+- **Xây xong slice đầu tiên ngoài setup base** (24/08/2026) — `VideoFilter`/`IVideoRepository`/`VideoRepository`, `VideoDto`, `GetVideosQuery`+Handler, `GetVideoByIdQuery`+Handler, `VideosController` (2 action: list + detail). Lý do chỉ Query, không Command — ghi ở [`../docs/decisions.md`](../docs/decisions.md) mục *Video feature (Query slice)...*.
+- **Kéo theo dọn lại Channel cho đồng bộ pattern mới**: `ChannelFilter` (mới, thay `PagedQuery` trần), `ChannelRepository`/`GetChannelsQueryHandler`/`DevDataSeeder` đổi sang trả/nhận `PagedResult<T>` qua `ToPagedResultAsync` thay vì tuple tự viết tay. `ChannelErrors`/`VideoErrors` (mới) gom hằng số error code, thay code cũ gõ string lặp 4 chỗ ở các handler Channel.
+- **3 bug thật tìm được lúc review `VideosController` tự viết tay** (đều build sạch, không phải lỗi compile): (1) `GetAll` bind nhầm `GetChannelsQuery` thay vì `GetVideosQuery` — copy-paste quên đổi type, `GET /api/videos` trả nhầm data Channel; (2) `GetById` dùng `[FromQuery]` thay vì lấy `id` từ route `{id:int}` — route bị bỏ qua hoàn toàn; (3) `GetVideoByIdQueryHandler` dùng `GetByIdAsync` chung (không `Include`) trong khi DTO cần `v.Channel.Name` → `NullReferenceException` runtime. Cả 3 đã sửa, thêm `IVideoRepository.GetByIdWithChannelAsync` riêng cho case (3) — chi tiết lý do ở `decisions.md`.
+- **Gặp và sửa 3 lần cùng 1 lỗi thiếu `namespace`** ở file mới tự viết tay (`VideoRepository.cs`, `VideoFilter.cs`, `VideoDto.cs`) — file rơi vào global namespace nên vẫn build được (C# cho phép), nhưng che mất lỗi import sai ở nơi khác (`GetVideoByIdQueryHandler` từng `using` nhầm `Channels.Dtos` mà không lộ ra vì `VideoDto` đang global). Đáng nhớ khi tự viết file `.cs` mới: luôn kiểm tra dòng `namespace` đầu file.
+
+✅ Nghiệm thu: `dotnet build` → 0 warning/0 error sau mỗi bước sửa (nhiều lần trong ngày 24/08/2026), bao gồm sau khi sửa cả 3 bug `VideosController`.
+
+⚠️ **Còn nợ**: `DevDataSeeder` mới seed Channel, **chưa seed Video** — `GET /api/videos` chạy đúng nhưng trả rỗng, `GET /api/videos/{id}` luôn 404. Cần làm trước khi FE dựng màn Video (List/Detail) có data thật để nhìn; không chặn nếu FE đợt này chỉ làm màn Channel.
+
 ## Đã chốt (setup base)
 
 Toàn bộ quyết định setup base đã ghi vào [`../docs/decisions.md`](../docs/decisions.md) mục "Setup base": config từ `appsettings.json`, Postgres local, FE Angular repo riêng, swagger không auto-gen, status VARCHAR, snake_case, Serilog, test hoãn.

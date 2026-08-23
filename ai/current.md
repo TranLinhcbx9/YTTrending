@@ -16,9 +16,19 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 | 6. Slice nghiệm thu (`AddChannel`) | ✅ Xong |
 | 7. Khung background job | ⬜ |
 
+## Tiến độ feature (ngoài setup base)
+
+| Feature | Trạng thái |
+|---|---|
+| Channel — full CRUD | ✅ Xong, có seed data |
+| Video — Query (List + Detail) | ✅ Xong, seed data Video **chưa làm** |
+| Video — Command (Add/Update/Delete) | Không cần đợt này — video do job tạo, xem [`../docs/decisions.md`](../docs/decisions.md) |
+
 ## Đang làm
 
-- **Bước tiếp theo: mục 7** (Khung background job) — checklist gốc ở [`setup-base.md`](setup-base.md), cách làm ở [`setup-base-notes.md`](setup-base-notes.md) mục S7.
+- **Mục 7 (Khung background job) hoãn có chủ đích** — không còn là "bước tiếp theo" mặc định, xem lý do ở [`../docs/decisions.md`](../docs/decisions.md) mục *Video feature (Query slice)...*. Quay lại khi cần data thật/tự động thay seed giả.
+- **Bước tiếp theo nếu tiếp tục backend**: seed Video giả vào `DevDataSeeder` (gắn vào 4 channel đã seed, đủ 3 status NEW/TRACKING/ARCHIVED) — hiện `GET /api/videos` chạy đúng nhưng DB rỗng vì chưa seed. Chi tiết ở [`history.md`](history.md) mục *Nhật ký — Video feature (Query slice)*.
+- **Tạm dừng backend ở đây để bắt đầu FE** (24/08/2026, theo quyết định user) — Channel đã có data thật để dùng ngay; Video có API đúng nhưng cần seed mới có gì để nhìn trên UI.
 - Mục 6 đóng toàn bộ nợ verify (của chính nó lẫn 2 khoản treo từ mục 5) — 22/08/2026, chi tiết ở [`history.md`](history.md) mục *Nhật ký — mục 6*.
 
 ## Lưu ý 🔑 cho bước sau

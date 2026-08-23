@@ -7,8 +7,9 @@ public sealed class GetChannelsQueryHandler(IChannelRepository channels)
 {
     public async Task<Result<PagedResult<ChannelDto>>> Handle(GetChannelsQuery q, CancellationToken ct)
     {
-        var (items, total) = await channels.GetPagedAsync(q.Page, q.PageSize, ct);
-        var dtos = items.Select(c => c.ToDto()).ToList();
-        return Result<PagedResult<ChannelDto>>.Success(new PagedResult<ChannelDto>(dtos, q.Page, q.PageSize, total));
+        var result = await channels.GetPagedAsync(q, ct);
+        var dtos = result.Items.Select(c => c.ToDto()).ToList();
+        return Result<PagedResult<ChannelDto>>.Success(
+            new PagedResult<ChannelDto>(dtos, result.Page, result.PageSize, result.TotalCount));
     }
 }
