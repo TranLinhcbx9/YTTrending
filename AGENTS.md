@@ -26,7 +26,7 @@ Công cụ cá nhân theo dõi kênh YouTube Shorts đối thủ, tổng hợp S
 - Không sửa tay `src/*/Migrations/` (EF sinh).
 
 ## Tài liệu — mở khi task cần (đều nằm trong `docs/`)
-- **Nền tảng**: overview · architecture · coding-convention · config · database
+- **Nền tảng**: overview · architecture · coding-convention · config · database · api-contract
 - **Domain** (`docs/domain/`): discovery-engine · video-lifecycle · metrics-snapshot · trending-engine · dashboard · video-detail · saved-ideas *(không tag / không bookmark channel)* · channel-management · background-jobs
 - **Lý do / ADR**: decisions   ·   **Ngoài phạm vi**: out-of-scope
 

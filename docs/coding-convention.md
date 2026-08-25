@@ -90,8 +90,11 @@ Chỉ nhắc, **không chép lại rule**: file-scoped namespace · `using` ngo�
 
 ## 11. Hợp đồng JSON với FE (Angular repo riêng)
 
-- `camelCase` · enum trả **string** · list bọc `PagedResult` · lỗi cùng một hình dạng `Error { code, type, message, fields }` · `Error.Fields` key **camelCase**.
-- Đổi shape DTO là **phải tự sửa** interface bên FE (compiler không báo giúp). API bật CORS.
+Chi tiết đầy đủ (endpoint, DTO, error shape thật, pagination) → [`docs/api-contract.md`](api-contract.md).
+Quy tắc khi thêm field/endpoint mới: camelCase property, enum trả string (giữ nguyên PascalCase),
+`Result<T>` thành công → trả thẳng `T` (không envelope), lỗi luôn qua `ProblemDetails` (RFC 7807) —
+không tự chế shape lỗi riêng. Đổi shape DTO là **phải tự sửa** interface bên FE (compiler không báo giúp)
+— nhớ cập nhật `api-contract.md` cùng lúc.
 
 ## 12. Test & commit
 

@@ -29,6 +29,7 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 - **Mục 7 (Khung background job) hoãn có chủ đích** — không còn là "bước tiếp theo" mặc định, xem lý do ở [`../docs/decisions.md`](../docs/decisions.md) mục *Video feature (Query slice)...*. Quay lại khi cần data thật/tự động thay seed giả.
 - **Bước tiếp theo nếu tiếp tục backend**: seed Video giả vào `DevDataSeeder` (gắn vào 4 channel đã seed, đủ 3 status NEW/TRACKING/ARCHIVED) — hiện `GET /api/videos` chạy đúng nhưng DB rỗng vì chưa seed. Chi tiết ở [`history.md`](history.md) mục *Nhật ký — Video feature (Query slice)*.
 - **Tạm dừng backend ở đây để bắt đầu FE** (24/08/2026, theo quyết định user) — Channel đã có data thật để dùng ngay; Video có API đúng nhưng cần seed mới có gì để nhìn trên UI.
+- **Đã tạo [`docs/api-contract.md`](../docs/api-contract.md)** (25/08/2026) — hợp đồng JSON chi tiết cho FE (endpoint, DTO, error shape thật, pagination), đối chiếu trực tiếp code thay vì suy đoán từ `coding-convention.md` §11 (vốn có vài chỗ sai — đã sửa để trỏ về file mới).
 - Mục 6 đóng toàn bộ nợ verify (của chính nó lẫn 2 khoản treo từ mục 5) — 22/08/2026, chi tiết ở [`history.md`](history.md) mục *Nhật ký — mục 6*.
 
 ## Lưu ý 🔑 cho bước sau
