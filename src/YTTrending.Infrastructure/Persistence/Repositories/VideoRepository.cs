@@ -9,7 +9,7 @@ public sealed class VideoRepository(YTTrendingDbContext db)
     public Task<PagedResult<Video>> GetPagedAsync(VideoFilter filter, CancellationToken ct)
         => Set.AsNoTracking()
             .Include(v => v.Channel)
-            .WhereIf(filter.ChannelId.HasValue, v => v.ChannelId == filter.ChannelId!.Value)
+            .WhereIf(filter.ChannelIds is { Length: > 0 }, v => filter.ChannelIds!.Contains(v.ChannelId))
             .WhereIf(filter.Status.HasValue, v => v.Status == filter.Status!.Value)
             .OrderByDescending(v => v.PublishedAt).ThenBy(v => v.Id)
             .ToPagedResultAsync(filter.Page, filter.PageSize, ct);
