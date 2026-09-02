@@ -4,7 +4,7 @@ public sealed class AddChannelCommandValidator : AbstractValidator<AddChannelCom
 {
     public AddChannelCommandValidator()
     {
-        RuleFor(x => x.YoutubeChannelId)
-            .NotEmpty().WithMessage("YoutubeChannelId is required.");
+        RuleFor(x => x.YoutubeHandle)
+            .NotEmpty().WithMessage("YoutubeHandle is required.");
     }
 }

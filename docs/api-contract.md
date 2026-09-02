@@ -49,7 +49,7 @@ Lỗi nghiệp vụ (`Result.Failure`) và lỗi validation đều map qua `Erro
   "detail": "Dữ liệu không hợp lệ",
   "code": "validation.failed",
   "errors": {
-    "youtubeChannelId": ["YoutubeChannelId is required."]
+    "youtubeHandle": ["YoutubeHandle is required."]
   }
 }
 ```
@@ -158,9 +158,10 @@ Chưa có create/update/delete cho Video — video do background job tạo/cập
 ### Request body — `AddChannelCommand` (POST `/api/channels`)
 
 ```json
-{ "youtubeChannelId": "UCxxxxxxxx" }
+{ "youtubeHandle": "@MrBeast" }
 ```
-Validate: `youtubeChannelId` bắt buộc (`NotEmpty`).
+Input là **YouTube handle** (`@name`, có hoặc không có dấu "@" đều được — server tự chuẩn hoá), **không phải channel ID**. Server resolve qua YouTube để lấy `youtubeChannelId` chuẩn trước khi lưu.
+Validate: `youtubeHandle` bắt buộc (`NotEmpty`).
 
 ### Request body — `UpdateChannelCommand` (PUT `/api/channels/{id}`)
 

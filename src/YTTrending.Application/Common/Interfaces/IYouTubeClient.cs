@@ -8,10 +8,11 @@ namespace YTTrending.Application.Common.Interfaces;
 public interface IYouTubeClient
 {
     /// <summary>
+    /// Nhận YouTube handle (@name, có hoặc không có dấu "@" đều được) — KHÔNG phải channel ID.
     /// Trả null khi channel không tồn tại — handler map thành Error.NotFound.
     /// Lỗi hạ tầng (hết quota, mạng, 5xx) vẫn ném exception, đúng phân loại ở docs/decisions.md.
     /// </summary>
-    Task<ChannelInfo?> GetChannelAsync(string youtubeChannelId, CancellationToken ct);
+    Task<ChannelInfo?> GetChannelAsync(string youtubeHandle, CancellationToken ct);
 
     /// <summary>
     /// N Shorts mới nhất của channel, thứ tự thời gian giảm dần.

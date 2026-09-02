@@ -5,12 +5,15 @@ namespace YTTrending.Infrastructure.YouTube;
 /// <summary>Client giả cho Dev/nghiệm thu — không gọi YouTube, không tốn quota. Bật bằng cờ "YouTube:UseFake".</summary>
 public sealed class FakeYouTubeClient : IYouTubeClient
 {
-    public Task<ChannelInfo?> GetChannelAsync(string youtubeChannelId, CancellationToken ct)
+    public Task<ChannelInfo?> GetChannelAsync(string youtubeHandle, CancellationToken ct)
     {
-        ChannelInfo? info = youtubeChannelId.StartsWith("UC", StringComparison.Ordinal)
-            ? new ChannelInfo(youtubeChannelId, $"Fake Channel {youtubeChannelId}",
-                              $"https://www.youtube.com/channel/{youtubeChannelId}")
-            : null;
+        var handle = youtubeHandle.StartsWith('@') ? youtubeHandle : $"@{youtubeHandle}";
+
+        // Gõ handle "@notfound" để giả lập channel không tồn tại (test luồng 404)
+        ChannelInfo? info = handle.Equals("@notfound", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : new ChannelInfo($"UC_FAKE_{handle[1..]}", $"Fake Channel {handle}",
+                               $"https://www.youtube.com/{handle}");
         return Task.FromResult(info);
     }
 
