@@ -15,7 +15,20 @@ public interface IYouTubeClient
     Task<ChannelInfo?> GetChannelAsync(string youtubeHandle, CancellationToken ct);
 
     /// <summary>
+    /// Uploads playlist id của một channel đã biết ChannelId — chỉ dùng để bù cho channel lưu
+    /// trước khi Channel.UploadsPlaylistId tồn tại. Trả null khi channel không còn trên YouTube.
+    /// <para>
+    /// Đường chính KHÔNG đi qua đây: AddChannel đã lấy sẵn giá trị này từ GetChannelAsync.
+    /// </para>
+    /// </summary>
+    Task<string?> GetUploadsPlaylistIdAsync(string youtubeChannelId, CancellationToken ct);
+
+    /// <summary>
     /// N Shorts mới nhất của channel, thứ tự thời gian giảm dần.
+    /// <para>
+    /// Nhận thẳng <paramref name="uploadsPlaylistId"/> (lấy từ Channel trong DB), KHÔNG nhận
+    /// channel id — client không tự đi tra cứu state, caller đưa đủ thứ nó cần.
+    /// </para>
     /// <para>
     /// <paramref name="limit"/> do handler truyền từ TrackingOptions.RecentShortsLimit —
     /// client KHÔNG đọc config.
@@ -27,7 +40,7 @@ public interface IYouTubeClient
     /// </para>
     /// </summary>
     Task<IReadOnlyList<ShortVideoInfo>> GetRecentShortsAsync(
-        string youtubeChannelId, int limit, CancellationToken ct);
+        string uploadsPlaylistId, int limit, CancellationToken ct);
 
     /// <summary>
     /// Nhận list dài tùy ý — implementation tự chia lô 50 (trần của videos.list), caller không

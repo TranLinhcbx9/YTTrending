@@ -19,7 +19,13 @@ public sealed class AddChannelCommandHandler(
         if (await channels.ExistsByYoutubeIdAsync(info.YoutubeChannelId, ct))
             return Result<ChannelDto>.Failure(Error.Conflict(ChannelErrors.AlreadyExists, "Channel này đã được theo dõi."));
 
-        var channel = new Channel { YoutubeChannelId = info.YoutubeChannelId, Name = info.Name, Url = info.Url };
+        var channel = new Channel
+        {
+            YoutubeChannelId = info.YoutubeChannelId,
+            Name = info.Name,
+            Url = info.Url,
+            UploadsPlaylistId = info.UploadsPlaylistId,
+        };
         channels.Create(channel);
         await uow.SaveChangesAsync(ct);
 

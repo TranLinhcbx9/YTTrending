@@ -13,12 +13,16 @@ public sealed class FakeYouTubeClient : IYouTubeClient
         ChannelInfo? info = handle.Equals("@notfound", StringComparison.OrdinalIgnoreCase)
             ? null
             : new ChannelInfo($"UC_FAKE_{handle[1..]}", $"Fake Channel {handle}",
-                               $"https://www.youtube.com/{handle}");
+                               $"https://www.youtube.com/{handle}",
+                               $"UU_FAKE_{handle[1..]}");
         return Task.FromResult(info);
     }
 
+    public Task<string?> GetUploadsPlaylistIdAsync(string youtubeChannelId, CancellationToken ct)
+        => Task.FromResult<string?>($"UU_FAKE_{youtubeChannelId}");
+
     public Task<IReadOnlyList<ShortVideoInfo>> GetRecentShortsAsync(
-        string youtubeChannelId, int limit, CancellationToken ct)
+        string uploadsPlaylistId, int limit, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<ShortVideoInfo>>([]);
 
     public Task<IReadOnlyList<VideoStats>> GetVideoStatsAsync(

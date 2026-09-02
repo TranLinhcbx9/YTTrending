@@ -1,7 +1,13 @@
 namespace YTTrending.Application.Common.Models;
 
-/// <summary>Khớp đúng 3 field required của entity Channel — handler gán thẳng, không phải bịa.</summary>
-public record ChannelInfo(string YoutubeChannelId, string Name, string Url);
+/// <summary>
+/// Khớp đúng 3 field required của entity Channel — handler gán thẳng, không phải bịa.
+/// <para>
+/// UploadsPlaylistId đi kèm luôn vì channels.list đã trả `contentDetails` trong cùng request
+/// resolve handle — lưu xuống ngay để Discovery khỏi gọi lại lần nữa.
+/// </para>
+/// </summary>
+public record ChannelInfo(string YoutubeChannelId, string Name, string Url, string? UploadsPlaylistId);
 
 /// <summary>
 /// Đủ để insert một row `videos` từ một lần gọi: 4 field required lấy được từ YouTube
