@@ -19,9 +19,18 @@ public static class DependencyInjection
         services.AddScoped<IVideoRepository, VideoRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
-        // Client YouTube: base chỉ có Fake; cờ "YouTube:UseFake" (mặc định true) để sau cắm client thật vào else
         if (configuration.GetValue("YouTube:UseFake", true))
+        {
             services.AddSingleton<IYouTubeClient, FakeYouTubeClient>();
+        }
+        else
+        {
+            services.AddHttpClient<IYouTubeClient, YouTubeClient>(client =>
+            {
+                client.BaseAddress = new Uri(
+                    "https://www.googleapis.com/youtube/v3/");
+            });
+        }
 
         return services;
     }

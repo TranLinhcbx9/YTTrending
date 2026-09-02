@@ -143,23 +143,26 @@
 - **Error code hằng số theo từng Feature (`ChannelErrors`, `VideoErrors`), không gom vào Common.** Trước đó `Error.NotFound("channel.notFound", ...)` gõ tay lặp lại 4 lần ở 4 handler khác nhau, không nguồn duy nhất. Đặt `XxxErrors` (static class chỉ chứa `const string`) ở namespace gốc feature (`Features/Channels/ChannelErrors.cs`, `Features/Videos/VideoErrors.cs`) — nhờ C# tự thấy namespace cha từ namespace con, mọi handler trong `Features/Channels/Commands|Queries/...` thấy được không cần thêm `using`. Đối xứng ngược với lý do `XxxFilter` ở Common: cái gì chỉ 1 feature dùng thì ở Feature, cái gì repository (Common) cần đọc thì ở Common.
 - **View Detail cần `Include` navigation property riêng, tách khỏi `IRepository<T>.GetByIdAsync` dùng chung.** `GetByIdAsync` (base) dùng `FindAsync` — không `Include` gì, đúng cho hầu hết trường hợp chỉ cần entity gốc. `GetVideoByIdQueryHandler` cần `video.Channel.Name` để map DTO nên thêm `IVideoRepository.GetByIdWithChannelAsync` riêng (có `.Include(v => v.Channel)`) thay vì đổi hành vi `GetByIdAsync` chung cho mọi consumer. Bug thật lúc code tay (24/08/2026, review `VideosController`): thiếu bước này gây `NullReferenceException` runtime — `dotnet build` sạch không bắt được, phải đọc kỹ logic. 2 bug khác cùng đợt review (bind nhầm `GetChannelsQuery` ở `GetAll`, `[FromQuery]` làm mất `id` từ route ở `GetById`) là copy-paste lỗi, không phải quyết định thiết kế — chi tiết ở [`../ai/history.md`](../ai/history.md).
 
+### Background job thật — Sync Channel Job + Metrics Update Job (chốt 01/09/2026)
+
+- **Resume Mục 7, gộp thẳng thành bản thật, không làm khung rỗng trước.** Lý do hoãn 24/08 (chưa có YouTube API key) không còn — key thật đã có. Gộp Sync Channel Job (discovery) và Metrics Update Job (view/snapshot/trending) làm cùng đợt thay vì tách 2 lần, vì cả hai đều cần `IYouTubeClient` thật và không có lý do kỹ thuật để tách. Kế hoạch chi tiết từng batch: [`../ai/plans/background-job-that.md`](../ai/plans/background-job-that.md) (file tạm, xoá sau khi xong).
+- **`YouTubeClient` thật gọi endpoint nào — chốt KHÔNG dùng `search.list`.** `search.list` tốn 100 unit/call — quá đắt để gọi mỗi channel mỗi lượt sync. Dùng `channels.list` (1 unit, lấy `contentDetails.relatedPlaylists.uploads`) → `playlistItems.list` (1 unit/trang, lấy N video mới nhất theo `RecentShortsLimit`) → `videos.list` (1 unit/call, batch tối đa 50 id — đã là hợp đồng sẵn có của `IYouTubeClient.GetVideoStatsAsync`, giờ áp dụng luôn cho bước lấy duration+stats trong Discovery).
+- **Ranh giới lọc: client lọc "có phải Shorts" (duration), handler lọc rule nghiệp vụ (MinViewsThreshold, RecentDays).** XML doc sẵn có trên `IYouTubeClient.GetRecentShortsAsync` (viết từ Batch 4) đã chốt "toàn bộ rule nghiệp vụ nằm ở handler, client không lọc gì" — duration không phải rule nghiệp vụ mà là điều kiện khách quan để một video được tính là Shorts (đúng nghĩa tên method `GetRecentShortsAsync`), nên filter theo `ShortsMaxDurationSeconds` (config mới) nằm trong client, tách biệt với `MinViewsThreshold`/`RecentDays` (vẫn ở handler).
+- **Giải Pending #2 (quota) bằng số thật, ở quy mô 20–50 channel:** Discovery/lượt ≈ 50 channel × (1 `channels.list` + 1 `playlistItems.list` + 1 `videos.list`) = 150 unit × 4 lượt/ngày (`SyncIntervalHours=6`) = **600 unit/ngày**. Metrics Update/lượt ≈ 5.000 video TRACKING (50 channel × `MaxTrackingVideosPerChannel=100`) ÷ 50/batch = 100 unit/lượt; cùng chu kỳ 6h = 400 unit/ngày, nếu sau này rút xuống 1h = 2.400 unit/ngày. Tổng xấu nhất ≈ 3.000 unit/ngày — dưới xa quota mặc định 10.000 unit/ngày. Không cần xin tăng quota ở quy mô hiện tại; tính lại nếu scale lên hàng trăm channel.
+- **Giải Pending #1: tách interval Metrics Update khỏi Sync** — thêm config `MetricsUpdateIntervalHours` riêng trong `TrackingOptions` (mặc định = `SyncIntervalHours` lúc đầu, chỉnh độc lập sau). Đúng như Pending #1 dự đoán — không đổi schema, chỉ thêm 1 job + 1 config.
+- **`JobOptions.Enabled` (1 cờ chung) tách thành `SyncEnabled` + `MetricsUpdateEnabled`.** 2 job độc lập, cần tắt/bật riêng lúc dev — tránh tình huống chỉ muốn test Metrics Update mà vô tình chạy luôn cả Sync (hoặc ngược lại), đốt quota không cần thiết.
+
+→ Ảnh hưởng: [`config.md`](config.md), [`domain/background-jobs.md`](domain/background-jobs.md), [`domain/metrics-snapshot.md`](domain/metrics-snapshot.md), [`domain/discovery-engine.md`](domain/discovery-engine.md).
+
 ## Pending (chưa chốt)
 
-### 1. Snapshot frequency tách riêng khỏi Sync Interval?
+### ~~1. Snapshot frequency tách riêng khỏi Sync Interval?~~ ✅ ĐÃ CHỐT
 
-Hiện tại gộp chung: sync channel mỗi `SyncIntervalHours` = tạo snapshot mỗi `SyncIntervalHours`.
+Tách riêng — config `MetricsUpdateIntervalHours` mới trong `TrackingOptions`, độc lập với `SyncIntervalHours`. Chi tiết ở mục *Background job thật* phía trên.
 
-Câu hỏi mở: có cần tách riêng — ví dụ sync channel (detect video mới) mỗi 6h, nhưng snapshot metrics mỗi 1h riêng cho video đang hot (đang TRACKING) để tính Trending Score chính xác hơn?
+### ~~2. API Quota (YouTube Data API)~~ ✅ ĐÃ CHỐT
 
-Không ảnh hưởng schema — nếu tách sau này chỉ cần thêm 1 job riêng, bảng snapshot không đổi.
-
-→ Ảnh hưởng: [`config.md`](config.md), [`domain/background-jobs.md`](domain/background-jobs.md), [`domain/metrics-snapshot.md`](domain/metrics-snapshot.md).
-
-### 2. API Quota (YouTube Data API)
-
-Với 20–50 channel, sync mỗi vài giờ, cần kiểm tra thực tế quota YouTube Data API có đủ dùng không trước khi lên production.
-
-→ Ảnh hưởng: [`domain/background-jobs.md`](domain/background-jobs.md), [`domain/channel-management.md`](domain/channel-management.md).
+Đã tính bằng số thật ở quy mô 20–50 channel: ~600 unit/ngày (Discovery) + 400–2.400 unit/ngày (Metrics Update tuỳ chu kỳ) — dưới xa quota mặc định 10.000/ngày. Chi tiết ở mục *Background job thật* phía trên.
 
 ### ~~3. Config đọc từ đâu — `appsettings.json` hay bảng `app_config`?~~ ✅ ĐÃ CHỐT
 

@@ -14,7 +14,7 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 | 4. Infrastructure — Persistence | ✅ Xong |
 | 5. API — wiring | ✅ Xong |
 | 6. Slice nghiệm thu (`AddChannel`) | ✅ Xong |
-| 7. Khung background job | ⬜ |
+| 7. Background job thật (Sync + Metrics) | 🔄 Đang làm — xem [`plans/background-job-that.md`](plans/background-job-that.md) |
 
 ## Tiến độ feature (ngoài setup base)
 
@@ -26,7 +26,7 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 
 ## Đang làm
 
-- **Mục 7 (Khung background job) hoãn có chủ đích** — không còn là "bước tiếp theo" mặc định, xem lý do ở [`../docs/decisions.md`](../docs/decisions.md) mục *Video feature (Query slice)...*. Quay lại khi cần data thật/tự động thay seed giả.
+- **Mục 7 resume 01/09/2026 — làm thẳng bản thật (Sync Channel Job + Metrics Update Job), không làm khung rỗng trước.** Lý do hoãn 24/08 (chưa có YouTube API key) hết hiệu lực — key thật đã có. Quyết định + số quota chi tiết ở [`../docs/decisions.md`](../docs/decisions.md) mục *Background job thật*; kế hoạch từng batch ở [`plans/background-job-that.md`](plans/background-job-that.md) (file tạm, xoá sau khi xong).
 - **Bước tiếp theo nếu tiếp tục backend**: seed Video giả vào `DevDataSeeder` (gắn vào 4 channel đã seed, đủ 3 status NEW/TRACKING/ARCHIVED) — hiện `GET /api/videos` chạy đúng nhưng DB rỗng vì chưa seed. Chi tiết ở [`history.md`](history.md) mục *Nhật ký — Video feature (Query slice)*.
 - **Tạm dừng backend ở đây để bắt đầu FE** (24/08/2026, theo quyết định user) — Channel đã có data thật để dùng ngay; Video có API đúng nhưng cần seed mới có gì để nhìn trên UI.
 - **Đã tạo [`docs/api-contract.md`](../docs/api-contract.md)** (25/08/2026) — hợp đồng JSON chi tiết cho FE (endpoint, DTO, error shape thật, pagination), đối chiếu trực tiếp code thay vì suy đoán từ `coding-convention.md` §11 (vốn có vài chỗ sai — đã sửa để trỏ về file mới).
@@ -39,7 +39,7 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 
 ## Block / Cần quyết định
 
-- Không có gì chặn. Pending #1 (tách snapshot frequency) và #2 (quota YouTube) chỉ ảnh hưởng lúc làm feature thật, không chặn base — xem [`../docs/decisions.md`](../docs/decisions.md).
+- Không có gì chặn. Pending #1/#2 cũ (snapshot frequency, quota YouTube) đã chốt 01/09/2026 — xem [`../docs/decisions.md`](../docs/decisions.md) mục *Background job thật*.
 
 ---
 

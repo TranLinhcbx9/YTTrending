@@ -40,6 +40,11 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<YouTubeOptions>()
+            .Bind(configuration.GetSection(YouTubeOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         return services;
     }
 }

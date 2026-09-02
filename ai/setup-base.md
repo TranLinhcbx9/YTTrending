@@ -71,6 +71,8 @@ Chưa cần: YouTube API thật, job chạy thật, trending score, test project
 
 ## 7. Khung background job
 
+> Gộp thẳng vào bản thật (Sync Channel Job + Metrics Update Job) thay vì làm khung rỗng trước — xem [`plans/background-job-that.md`](plans/background-job-that.md) và [`../docs/decisions.md`](../docs/decisions.md) mục *Background job thật* (01/09/2026). Checklist dưới đây là baseline gốc, giữ lại để tham khảo.
+
 - [ ] `SyncChannelJob` — kill-switch, try/catch, chống chạy chồng
 - [ ] `SyncChannelsCommand` (rỗng, chỉ log)
 - [ ] `JobsController` — chạy tay

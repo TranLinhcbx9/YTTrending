@@ -9,6 +9,10 @@ public sealed class TrackingOptions
     [Range(1, 24)]
     public int SyncIntervalHours { get; init; }
 
+    // Chu kỳ chạy Metrics Update Job (giờ)
+    [Range(1, 24)]
+    public int MetricsUpdateIntervalHours { get; init; }
+
     // Video đăng trong N ngày gần nhất được Discovery coi là "video mới"
     [Range(1, 365)]
     public int RecentDays { get; init; }
@@ -24,6 +28,10 @@ public sealed class TrackingOptions
     // Ngưỡng view tối thiểu để video được đưa vào tracking lúc Discovery
     [Range(0, long.MaxValue)]
     public long MinViewsThreshold { get; init; }
+
+    // Trần thời lượng (giây) để video được coi là Shorts
+    [Range(1, 3600)]
+    public int ShortsMaxDurationSeconds { get; init; }
 
     // Số ngày giữ video ARCHIVED trước khi Cleanup Job soft-delete
     [Range(1, 365)]

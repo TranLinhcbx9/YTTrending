@@ -511,6 +511,8 @@ Không làm ở base. Khi nào làm, việc còn lại chỉ là: tạo `tests/Y
 
 Xong S7 là hết base. Feature thật bắt đầu ở [`../docs/domain/discovery-engine.md`](../docs/domain/discovery-engine.md).
 
+> **01/09/2026:** gộp thẳng S7 vào bản thật, bỏ qua bước "khung rỗng" — xem [`plans/background-job-that.md`](plans/background-job-that.md).
+
 ---
 
 ## Phần C — Quyết định đã chốt
