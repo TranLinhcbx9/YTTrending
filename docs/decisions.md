@@ -158,6 +158,17 @@
 
 → Ảnh hưởng: [`config.md`](config.md), [`domain/background-jobs.md`](domain/background-jobs.md), [`domain/metrics-snapshot.md`](domain/metrics-snapshot.md), [`domain/discovery-engine.md`](domain/discovery-engine.md), [`api-contract.md`](api-contract.md) *(đã cập nhật)*.
 
+### Sync thủ công (nút "Sync now") — chốt 03/09/2026
+
+- **2 nút, không phải 1.** Nút Sync-toàn-bộ (channel list/dashboard, gọi `POST /api/jobs/sync`, đúng như Batch E đã định) **và** nút Sync riêng từng channel (trang channel detail, endpoint mới `POST /api/channels/{id}/sync` trong `ChannelsController` — theo convention action-on-resource đã có của `Edit`/`Delete`).
+- **`SyncChannelsCommand` (Batch C, không tham số, tự loop toàn bộ enabled channel trong 1 handler) đổi hướng thành `SyncChannelCommand(ChannelId)` atomic cho 1 channel.** Đây là đơn vị dùng chung duy nhất cho cả 2 nút: nút riêng-channel gọi thẳng; nút Sync-toàn-bộ chỉ là loop mỏng — lấy `GetEnabledAsync()` rồi `Send(new SyncChannelCommand(channel.Id))` qua MediatR cho từng channel. **Thay thế shape mẫu ở [`../ai/plans/background-job-that.md`](../ai/plans/background-job-that.md) Batch C** — code mẫu cũ trong file đó (loop nội bộ, 1 `SaveChangesAsync` cuối cùng cho cả batch) không còn đúng, sửa lại theo hướng này lúc code thật.
+- **Cô lập lỗi theo channel: mỗi channel tự `SaveChangesAsync` riêng trong `SyncChannelCommandHandler`, không gộp save 1 lần cuối cả loop.** Code mẫu cũ của Batch C gộp chung nên 1 channel lỗi giữa batch (hết quota, channel bị xoá trên YouTube...) sẽ làm mất luôn data đã fetch được của các channel trước đó (không có gì được save). Loop Sync-toàn-bộ bắt exception quanh mỗi lần `Send`, log lại, tiếp tục channel kế — không dừng cả lượt.
+- **`JobOptions.SyncEnabled` chỉ chặn job nền tự động chạy theo chu kỳ, không chặn 2 nút manual.** Mục đích flag này (theo comment gốc) là tránh burn quota *tự động* lúc debug ở Development — bấm nút là hành động chủ đích. Nếu flag chặn luôn manual thì Development không còn cách nào test luồng sync thật mà không phải bật hẳn job nền.
+- **Cooldown chống spam click: dùng lại `TrackingOptions.SyncIntervalHours`** làm khoảng cách tối thiểu giữa 2 lần sync của cùng 1 channel (so với `Channel.LastSyncAt`), không thêm config riêng — ý nghĩa đã đúng sẵn ("không sync tay nhanh hơn chính chu kỳ job"). Gọi sớm hơn → `Result.Failure` (Conflict).
+- **Chống chạy chồng cùng 1 channel (job nền + tay trùng lúc, hoặc double-click nhanh): in-memory lock theo `ChannelId`** (`ConcurrentDictionary<int, byte>` hoặc tương đương, singleton DI, `TryAdd`/`Remove`), KHÔNG dùng DB-level (`FOR UPDATE`, Postgres advisory lock, hay cột `IsSyncing` + conditional UPDATE). Lý do loại DB-level: app Phase 1 chạy 1 instance, không có nhu cầu multi-instance; giữ DB lock/transaction mở suốt lúc gọi YouTube API (vài giây) là anti-pattern (giữ connection pool + lock treo theo tốc độ mạng ngoài); còn cột `IsSyncing` persisted thì nếu crash giữa chừng sẽ kẹt `true` mãi, phải thêm logic dọn stale-lock — in-memory tự sạch khi process restart, không cần logic đó. Cân nhắc lại nếu sau này thật sự scale nhiều instance.
+
+→ Ảnh hưởng: [`../ai/plans/background-job-that.md`](../ai/plans/background-job-that.md) (Batch C cần sửa lại shape command khi code), [`api-contract.md`](api-contract.md) (thêm 2 endpoint mới khi code).
+
 ## Pending (chưa chốt)
 
 ### ~~1. Snapshot frequency tách riêng khỏi Sync Interval?~~ ✅ ĐÃ CHỐT
