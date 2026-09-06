@@ -31,6 +31,7 @@ Công cụ cá nhân theo dõi kênh YouTube Shorts đối thủ, tổng hợp S
 - **Lý do / ADR**: decisions   ·   **Ngoài phạm vi**: out-of-scope
 
 ## Cách làm việc
+- **Trước mỗi lần code hoặc sửa code, bắt buộc đọc [`docs/coding-convention.md`](docs/coding-convention.md).**
 - Chỉ đọc tài liệu liên quan tới task hiện tại.
 - Sửa / append doc to (`decisions.md`, `setup-base-notes.md`…): tìm mục → đọc đúng đoạn liên quan, **đừng đọc cả file**; sửa xong kiểm tra diff và đúng đoạn vừa đổi, không đọc lại toàn bộ file dài chỉ để verify.
 - Sửa hành vi domain → đọc file tương ứng trong `docs/domain/` trước.

@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using YTTrending.Application.Common.Behaviors;
+using YTTrending.Application.Common.Interfaces;
 using YTTrending.Application.Common.Options;
+using YTTrending.Application.Common.Services;
 
 namespace YTTrending.Application;
 
@@ -23,6 +25,9 @@ public static class DependencyInjection
         // ValidationBehavior resolve IEnumerable<IValidator<TRequest>> từ đây. Chưa có validator
         // nào (Features ở mục 6) -> list rỗng, behavior đã có nhánh count == 0 đi thẳng.
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
+
+        services.AddScoped<IShortsDiscoveryService, ShortsDiscoveryService>();
+        services.AddScoped<IVideoSyncService, VideoSyncService>();
 
         // ValidateOnStart: sai config -> app chết lúc khởi động, không chết lúc job chạy 3h sáng.
         services.AddOptions<TrackingOptions>()

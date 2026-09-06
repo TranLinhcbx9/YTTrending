@@ -1,4 +1,4 @@
-namespace YTTrending.Application.Features.Jobs.SyncChannel;
+namespace YTTrending.Application.Features.Jobs.Dtos;
 
 /// <summary>
 /// Facts của một lượt sync. FE sở hữu wording/toast và suy ra nội dung từ các count này.

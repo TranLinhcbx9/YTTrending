@@ -1,5 +1,5 @@
+namespace YTTrending.Application.Features.Jobs.Commands.SyncChannel;
 
-namespace YTTrending.Application.Features.Jobs.SyncChannel;
 public sealed class SyncChannelCommandValidator : AbstractValidator<SyncChannelCommand>
 {
     public SyncChannelCommandValidator()

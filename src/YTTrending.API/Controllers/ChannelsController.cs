@@ -3,7 +3,7 @@ using YTTrending.Application.Features.Channels.Commands.DeleteChannel;
 using YTTrending.Application.Features.Channels.Commands.UpdateChannel;
 using YTTrending.Application.Features.Channels.Queries.GetChannelById;
 using YTTrending.Application.Features.Channels.Queries.GetChannels;
-using YTTrending.Application.Features.Jobs.SyncChannel;
+using YTTrending.Application.Features.Jobs.Commands.SyncChannel;
 
 namespace YTTrending.API.Controllers;
 
