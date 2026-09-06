@@ -50,7 +50,7 @@ public sealed class SyncChannelCommandHandler(
             // Đọc/lọc Shorts từ YouTube theo discovery rule; service tự phân trang và dừng khi đủ quota.
             var discovery = await shortsDiscovery.DiscoverAsync(uploadsPlaylistResult.Value, now, tracking, ct);
 
-            // Reconcile tập Shorts đã chọn với video active: archive quá hạn, refresh record cũ và thêm record mới.
+            // Reconcile tập Shorts đã chọn với lifecycle: archive quá hạn, promote NEW cũ, refresh record active và tạo NEW mới.
             var videoChanges = await videoSync.ApplyDiscoveryAsync(channel, discovery.SelectedShorts, now, tracking, ct);
 
             channel.LastSyncAt = now;
@@ -58,6 +58,7 @@ public sealed class SyncChannelCommandHandler(
             return Result<SyncChannelResultDto>.Success(new(
                 FetchedShortsCount: discovery.FetchedShortsCount,
                 QualifiedShortsCount: discovery.QualifiedShortsCount,
+                NewlyDiscoveredCount: videoChanges.NewlyDiscoveredCount,
                 NewlyTrackedCount: videoChanges.NewlyTrackedCount,
                 ExistingVideosRefreshedCount: videoChanges.ExistingVideosRefreshedCount,
                 ArchivedVideosCount: videoChanges.ArchivedVideosCount));
@@ -75,7 +76,7 @@ public sealed class SyncChannelCommandHandler(
     private static Error? ValidateSyncInterval(Channel channel, DateTimeOffset now, TrackingOptions tracking)
     {
         if (channel.LastSyncAt is not { } lastSync
-            || now - lastSync >= TimeSpan.FromHours(tracking.SyncIntervalHours))
+            || now - lastSync >= TimeSpan.FromHours(tracking.ManualSyncCooldownHours))
         {
             return null;
         }

@@ -26,7 +26,7 @@ Chu kỳ Sync Channel Job (discovery — phát hiện video mới) và Metrics U
 
 ### Video Tracking Rule
 
-`RecentDays`, `MaxQualifiedVideosPerChannel`, `MinViewsThreshold` là 3 thông số Discovery dùng để quyết định video nào được tracking — rule đầy đủ ở [`domain/discovery-engine.md`](domain/discovery-engine.md). `ShortsMaxDurationSeconds` là điều kiện riêng, lọc **trước** 3 rule trên: video dài hơn ngưỡng này không phải Shorts, bị loại ngay ở `YouTubeClient` (không phải rule nghiệp vụ tracking).
+`RecentDays`, `MaxQualifiedVideosPerChannel`, `MinViewsThreshold` là 3 thông số Discovery dùng để quyết định video nào được lưu thành candidate NEW — rule đầy đủ ở [`domain/discovery-engine.md`](domain/discovery-engine.md). NEW được promote sang TRACKING ở lượt sync thành công kế tiếp nếu còn slot `MaxTrackingVideosPerChannel`; xem [`domain/video-lifecycle.md`](domain/video-lifecycle.md). `ShortsMaxDurationSeconds` là điều kiện riêng, lọc **trước** 3 rule trên: video dài hơn ngưỡng này không phải Shorts, bị loại ngay ở `YouTubeClient` (không phải rule nghiệp vụ tracking).
 
 ### Archived Retention
 

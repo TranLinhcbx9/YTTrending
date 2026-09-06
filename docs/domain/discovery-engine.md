@@ -24,7 +24,7 @@ Compare Database          Bỏ qua hoàn toàn, không lưu
     ↓                      (sẽ được xem xét lại ở
 Detect New Videos          lần sync kế tiếp nếu vẫn
     ↓                      còn trong recent list)
-Add Tracking Queue
+Persist NEW Candidate
 ```
 
 **Nguyên tắc:**
@@ -41,7 +41,7 @@ Dùng **VideoId** (ID cố định do YouTube cấp) làm khóa duy nhất để
 2. Lấy list VideoId qualify vừa chọn.
 3. Query DB: SELECT youtube_video_id FROM videos WHERE youtube_video_id IN (list vừa fetch).
 4. So sánh (set difference):
-   - VideoId có trong fetch nhưng KHÔNG có trong DB → Video mới → thêm vào Tracking Queue.
+   - VideoId có trong fetch nhưng KHÔNG có trong DB → Video mới → tạo candidate ở trạng thái NEW. Candidate này chỉ được promote sang TRACKING ở lượt sync thành công kế tiếp, theo lifecycle.
    - VideoId có trong cả 2 → Video đã biết → chỉ UPDATE field nếu có thay đổi
      (title, thumbnail...), KHÔNG tạo record mới.
    - VideoId có trong DB nhưng không nằm trong lượt chọn hiện tại vẫn tiếp tục TRACKING; chỉ chuyển ARCHIVED khi `PublishedAt` đã ra khỏi `RecentDays`.

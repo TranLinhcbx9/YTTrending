@@ -9,6 +9,9 @@ public sealed class TrackingOptions
     [Range(1, 24)]
     public int SyncIntervalHours { get; init; }
 
+    [Range(0, 24)]
+    public float ManualSyncCooldownHours { get; init; }
+
     // Chu kỳ chạy Metrics Update Job (giờ)
     [Range(1, 24)]
     public int MetricsUpdateIntervalHours { get; init; }
@@ -17,7 +20,7 @@ public sealed class TrackingOptions
     [Range(1, 365)]
     public int RecentDays { get; init; }
 
-    // Số Shorts đạt MinViewsThreshold mới nhất được đưa vào tracking trong RecentDays.
+    // Số Shorts đạt MinViewsThreshold mới nhất được Discovery chọn làm NEW candidate trong RecentDays.
     [Range(1, 100)]
     public int MaxQualifiedVideosPerChannel { get; init; }
 
@@ -25,7 +28,7 @@ public sealed class TrackingOptions
     [Range(1, 1000)]
     public int MaxTrackingVideosPerChannel { get; init; }
 
-    // Ngưỡng view tối thiểu để video được đưa vào tracking lúc Discovery
+    // Ngưỡng view tối thiểu để video được Discovery lưu làm NEW candidate.
     [Range(0, long.MaxValue)]
     public long MinViewsThreshold { get; init; }
 

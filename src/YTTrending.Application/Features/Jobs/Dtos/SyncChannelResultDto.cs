@@ -6,6 +6,7 @@ namespace YTTrending.Application.Features.Jobs.Dtos;
 public sealed record SyncChannelResultDto(
     int FetchedShortsCount,
     int QualifiedShortsCount,
+    int NewlyDiscoveredCount,
     int NewlyTrackedCount,
     int ExistingVideosRefreshedCount,
     int ArchivedVideosCount);
