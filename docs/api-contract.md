@@ -143,7 +143,7 @@ Chưa có create/update/delete cho Video — video do background job tạo/cập
 ```ts
 {
   id: number;
-  youtubeVideoId: string;
+  youtubeVideoUrl: string;
   channelId: number;
   channelName: string;
   title: string;
@@ -174,13 +174,14 @@ Validate: `id > 0`, `name` bắt buộc, `url` bắt buộc + phải là absolut
 
 ### Request — `POST /api/channels/{id}/sync`
 
-Đồng bộ Shorts của một channel ngay lập tức; không có request body. Thành công trả `200 OK` với các count để FE tự quyết định wording/toast. Endpoint dùng YouTube Data API, chọn tối đa số Shorts qualify mới nhất trong `RecentDays`, tạo video mới, cập nhật metadata của video active được chọn, archive video active đã ra khỏi tracking window và cập nhật `lastSyncAt`.
+Đồng bộ Shorts của một channel ngay lập tức; không có request body. Thành công trả `200 OK` với các count để FE tự quyết định wording/toast. Endpoint dùng YouTube Data API, chọn tối đa số Shorts qualify mới nhất trong `RecentDays`, tạo candidate `NEW`, promote candidate `NEW` từ lượt trước sang `TRACKING`, cập nhật metadata của video active được chọn, archive video active đã ra khỏi tracking window và cập nhật `lastSyncAt`.
 
 ```json
 {
   "fetchedShortsCount": 32,
   "qualifiedShortsCount": 20,
-  "newlyTrackedCount": 5,
+  "newlyDiscoveredCount": 5,
+  "newlyTrackedCount": 3,
   "existingVideosRefreshedCount": 15,
   "archivedVideosCount": 2
 }
