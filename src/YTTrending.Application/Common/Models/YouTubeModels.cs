@@ -30,6 +30,15 @@ public record ShortVideoInfo(
     long Comments);
 
 /// <summary>
+/// Một trang Shorts theo thứ tự mới đến cũ của uploads playlist. Mốc upload cũ nhất giúp
+/// Application dừng phân trang ngay khi đã đi qua cửa sổ Discovery mà không crawl lịch sử channel.
+/// </summary>
+public record ShortsPage(
+    IReadOnlyList<ShortVideoInfo> Shorts,
+    string? NextPageToken,
+    DateTimeOffset? OldestPlaylistItemPublishedAt);
+
+/// <summary>
 /// Metrics Update Job chỉ cần 3 số, không kéo lại metadata.
 /// <para>
 /// KHÔNG mang mốc thời gian: YouTube không trả "đo lúc nào", nên SnapshotAt do job set bằng

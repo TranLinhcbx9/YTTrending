@@ -21,9 +21,9 @@ public sealed class FakeYouTubeClient : IYouTubeClient
     public Task<string?> GetUploadsPlaylistIdAsync(string youtubeChannelId, CancellationToken ct)
         => Task.FromResult<string?>($"UU_FAKE_{youtubeChannelId}");
 
-    public Task<IReadOnlyList<ShortVideoInfo>> GetRecentShortsAsync(
-        string uploadsPlaylistId, int limit, CancellationToken ct)
-        => Task.FromResult<IReadOnlyList<ShortVideoInfo>>([]);
+    public Task<ShortsPage> GetRecentShortsPageAsync(
+        string uploadsPlaylistId, string? pageToken, CancellationToken ct)
+        => Task.FromResult(new ShortsPage([], null, null));
 
     public Task<IReadOnlyList<VideoStats>> GetVideoStatsAsync(
         IReadOnlyList<string> youtubeVideoIds, CancellationToken ct)

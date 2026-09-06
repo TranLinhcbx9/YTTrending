@@ -17,9 +17,9 @@ public sealed class TrackingOptions
     [Range(1, 365)]
     public int RecentDays { get; init; }
 
-    // Số Shorts mới nhất của channel vẫn được xét dù đã ngoài RecentDays (điều kiện OR)
+    // Số Shorts đạt MinViewsThreshold mới nhất được đưa vào tracking trong RecentDays.
     [Range(1, 100)]
-    public int RecentShortsLimit { get; init; }
+    public int MaxQualifiedVideosPerChannel { get; init; }
 
     // Trần số video/channel đang ở trạng thái TRACKING cùng lúc
     [Range(1, 1000)]

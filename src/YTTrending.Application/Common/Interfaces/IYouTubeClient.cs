@@ -24,23 +24,19 @@ public interface IYouTubeClient
     Task<string?> GetUploadsPlaylistIdAsync(string youtubeChannelId, CancellationToken ct);
 
     /// <summary>
-    /// N Shorts mới nhất của channel, thứ tự thời gian giảm dần.
+    /// Một trang Shorts của channel, thứ tự thời gian giảm dần.
     /// <para>
     /// Nhận thẳng <paramref name="uploadsPlaylistId"/> (lấy từ Channel trong DB), KHÔNG nhận
     /// channel id — client không tự đi tra cứu state, caller đưa đủ thứ nó cần.
     /// </para>
     /// <para>
-    /// <paramref name="limit"/> do handler truyền từ TrackingOptions.RecentShortsLimit —
-    /// client KHÔNG đọc config.
-    /// </para>
-    /// <para>
-    /// Cả 2 vế OR của Discovery rule (đăng trong RecentDays HOẶC nằm trong N mới nhất) lẫn
-    /// ngưỡng MinViewsThreshold đều do handler lọc trên kết quả này — toàn bộ rule nghiệp vụ
-    /// nằm một chỗ, FakeYouTubeClient không phải chép lại rule nào.
+    /// <paramref name="pageToken"/> là token do trang trước trả về; null nghĩa là trang đầu.
+    /// Client KHÔNG đọc config Discovery và không lọc theo ngày hoặc view; các rule nghiệp vụ
+    /// đó do handler áp dụng.
     /// </para>
     /// </summary>
-    Task<IReadOnlyList<ShortVideoInfo>> GetRecentShortsAsync(
-        string uploadsPlaylistId, int limit, CancellationToken ct);
+    Task<ShortsPage> GetRecentShortsPageAsync(
+        string uploadsPlaylistId, string? pageToken, CancellationToken ct);
 
     /// <summary>
     /// Nhận list dài tùy ý — implementation tự chia lô 50 (trần của videos.list), caller không

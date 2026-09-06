@@ -13,6 +13,7 @@ public sealed class YouTubeClient(HttpClient http, IOptions<TrackingOptions> tra
     /// Không phải thông số cấu hình được — nâng lên sẽ nhận 400 từ API.
     /// </summary>
     private const int MaxVideoIdsPerRequest = 50;
+    private const int MaxPlaylistItemsPerRequest = 50;
 
     private readonly TrackingOptions _tracking = trackingOptions.Value;
     private readonly string _apiKey = youtubeOptions.Value.ApiKey;
@@ -54,20 +55,29 @@ public sealed class YouTubeClient(HttpClient http, IOptions<TrackingOptions> tra
         return ReadUploadsPlaylistId(items[0]);
     }
 
-    public async Task<IReadOnlyList<ShortVideoInfo>> GetRecentShortsAsync(
-        string uploadsPlaylistId, int limit, CancellationToken ct)
+    public async Task<ShortsPage> GetRecentShortsPageAsync(
+        string uploadsPlaylistId, string? pageToken, CancellationToken ct)
     {
-        // 1. Lấy N video id mới nhất trong uploads playlist (id do caller đưa — không tra cứu lại)
-        var playlistUrl = $"playlistItems?part=snippet&playlistId={uploadsPlaylistId}&maxResults={limit}&key={_apiKey}";
+        // Lấy một trang uploads; handler quyết định có cần trang tiếp theo theo tracking window hay không.
+        var pageTokenQuery = pageToken is null ? string.Empty : $"&pageToken={Uri.EscapeDataString(pageToken)}";
+        var playlistUrl = $"playlistItems?part=snippet&playlistId={uploadsPlaylistId}&maxResults={MaxPlaylistItemsPerRequest}{pageTokenQuery}&key={_apiKey}";
         using var playlistDoc = await GetJsonAsync(playlistUrl, ct);
 
-        var videoIds = playlistDoc.RootElement.GetProperty("items")
-            .EnumerateArray()
+        var playlistItems = playlistDoc.RootElement.TryGetProperty("items", out var items)
+            ? items.EnumerateArray().ToArray()
+            : [];
+        var videoIds = playlistItems
             .Select(i => i.GetProperty("snippet").GetProperty("resourceId").GetProperty("videoId").GetString()!)
             .ToList();
+        DateTimeOffset? oldestPlaylistItemPublishedAt = playlistItems.Length == 0
+            ? null
+            : playlistItems[^1].GetProperty("snippet").GetProperty("publishedAt").GetDateTimeOffset();
+        var nextPageToken = playlistDoc.RootElement.TryGetProperty("nextPageToken", out var nextPageTokenElement)
+            ? nextPageTokenElement.GetString()
+            : null;
 
         if (videoIds.Count == 0)
-            return [];
+            return new ShortsPage([], nextPageToken, oldestPlaylistItemPublishedAt);
 
         // 2. Lấy chi tiết (duration, statistics, snippet) cho từng video, chia lô theo giới hạn API
         var result = new List<ShortVideoInfo>();
@@ -120,7 +130,7 @@ public sealed class YouTubeClient(HttpClient http, IOptions<TrackingOptions> tra
             }
         }
 
-        return result;
+        return new ShortsPage(result, nextPageToken, oldestPlaylistItemPublishedAt);
     }
 
     public Task<IReadOnlyList<VideoStats>> GetVideoStatsAsync(

@@ -9,7 +9,7 @@ Toàn bộ thông số hệ thống không hardcode, có thể cấu hình.
   "SyncIntervalHours": 6,
   "MetricsUpdateIntervalHours": 6,
   "RecentDays": 7,
-  "RecentShortsLimit": 20,
+  "MaxQualifiedVideosPerChannel": 20,
   "MaxTrackingVideosPerChannel": 100,
   "MinViewsThreshold": 100000,
   "ShortsMaxDurationSeconds": 180,
@@ -26,7 +26,7 @@ Chu kỳ Sync Channel Job (discovery — phát hiện video mới) và Metrics U
 
 ### Video Tracking Rule
 
-`RecentDays`, `RecentShortsLimit`, `MinViewsThreshold` là 3 thông số Discovery dùng để quyết định video nào được tracking — rule đầy đủ (điều kiện OR/AND) ở [`domain/discovery-engine.md`](domain/discovery-engine.md). `ShortsMaxDurationSeconds` là điều kiện riêng, lọc **trước** 3 rule trên: video dài hơn ngưỡng này không phải Shorts, bị loại ngay ở `YouTubeClient` (không phải rule nghiệp vụ tracking).
+`RecentDays`, `MaxQualifiedVideosPerChannel`, `MinViewsThreshold` là 3 thông số Discovery dùng để quyết định video nào được tracking — rule đầy đủ ở [`domain/discovery-engine.md`](domain/discovery-engine.md). `ShortsMaxDurationSeconds` là điều kiện riêng, lọc **trước** 3 rule trên: video dài hơn ngưỡng này không phải Shorts, bị loại ngay ở `YouTubeClient` (không phải rule nghiệp vụ tracking).
 
 ### Archived Retention
 
@@ -81,7 +81,7 @@ Chi tiết: [`domain/dashboard.md`](domain/dashboard.md)
 Toàn bộ các thông số quan trọng đều đưa vào configuration, **không hardcode trong code**, để sau khi dùng thực tế có thể tinh chỉnh mà không phải sửa logic hệ thống:
 
 - Sync interval và Metrics Update interval (tách riêng).
-- Tracking window (RecentDays / RecentShortsLimit).
+- Tracking window và quota discovery (RecentDays / MaxQualifiedVideosPerChannel).
 - Min views threshold để bắt đầu tracking.
 - Shorts max duration (lọc video dài thành Shorts).
 - Trending score weights (ViewGrowthWeight, VelocityWeight).

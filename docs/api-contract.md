@@ -110,6 +110,7 @@ Không đi qua `Error`/`ErrorType` — do `GlobalExceptionHandler` xử lý riê
 | GET | `/api/channels/{id}` | route `id` | 200, `ChannelDto` |
 | PUT | `/api/channels/{id}` | route `id` + body `UpdateChannelCommand` (`id` trong body bị route ghi đè) | 200, `ChannelDto` |
 | DELETE | `/api/channels/{id}` | route `id` | 204 |
+| POST | `/api/channels/{id}/sync` | route `id`, không body | 200, `SyncChannelResultDto` |
 
 ### Videos — `api/videos`
 
@@ -130,6 +131,7 @@ Chưa có create/update/delete cho Video — video do background job tạo/cập
   youtubeChannelId: string;
   name: string;
   url: string;
+  uploadsPlaylistId: string | null;
   isEnabled: boolean;
   lastSyncAt: string | null;   // DateTimeOffset ISO 8601
   createdAt: string;           // DateTimeOffset ISO 8601
@@ -170,9 +172,29 @@ Validate: `youtubeHandle` bắt buộc (`NotEmpty`).
 ```
 Validate: `id > 0`, `name` bắt buộc, `url` bắt buộc + phải là absolute URL hợp lệ (`Uri.IsWellFormedUriString`). `id` trong body không cần khớp route (bị override).
 
+### Request — `POST /api/channels/{id}/sync`
+
+Đồng bộ Shorts của một channel ngay lập tức; không có request body. Thành công trả `200 OK` với các count để FE tự quyết định wording/toast. Endpoint dùng YouTube Data API, chọn tối đa số Shorts qualify mới nhất trong `RecentDays`, tạo video mới, cập nhật metadata của video active được chọn, archive video active đã ra khỏi tracking window và cập nhật `lastSyncAt`.
+
+```json
+{
+  "fetchedShortsCount": 32,
+  "qualifiedShortsCount": 20,
+  "newlyTrackedCount": 5,
+  "existingVideosRefreshedCount": 15,
+  "archivedVideosCount": 2
+}
+```
+
+Khi channel đang được một request khác sync, server trả `409` với code `channel.syncInProgress`. `id <= 0` trả validation error `400`; id không tồn tại trả `404` với code `channel.notFound`.
+
 ### Query params — `GET /api/videos`
 
-`channelId` (optional, số), `status` (optional, `New`/`Tracking`/`Archived`), cộng `page`/`pageSize` (mục 5).
+- `channelIds` (optional, mảng số): lọc theo một hoặc nhiều channel. Gửi query key lặp lại, ví dụ `?channelIds=1&channelIds=3`.
+- `status` (optional): `New` / `Tracking` / `Archived`.
+- `minViews` (optional, số nguyên 64-bit): chỉ lấy video có `latestViews >= minViews`.
+- `timeRanges` (optional, số ngày): chỉ lấy video có `publishedAt` trong N ngày gần nhất. Tên param trên wire hiện là số nhiều: `timeRanges`.
+- `page`, `pageSize`: theo mục 5.
 
 ## 8. Enum `VideoStatus`
 
@@ -184,6 +206,7 @@ Validate: `id > 0`, `name` bắt buộc, `url` bắt buộc + phải là absolut
 |---|---|---|
 | `channel.notFound` | Không tìm thấy channel (theo id, hoặc theo YoutubeChannelId khi add) | 404 |
 | `channel.exists` | Add channel trùng (đã theo dõi rồi) | 409 |
+| `channel.syncInProgress` | Có request sync khác đang chạy cho cùng channel | 409 |
 | `video.notFound` | Không tìm thấy video theo id | 404 |
 | `validation.failed` | FluentValidation fail (mọi command có validator) | 400 |
 | `server.error` | Exception chưa lường trước | 500 |
@@ -194,5 +217,5 @@ Validate: `id > 0`, `name` bắt buộc, `url` bắt buộc + phải là absolut
 - CORS chỉ hoạt động ở Development — chưa có cấu hình cho production.
 - Không có `VideoDetailDto` riêng biệt — trang detail phải tự đủ dùng với `VideoDto`.
 - `POST` tạo resource trả `200`, không phải `201` — đừng dựa vào status code để phân biệt create/read.
-- Video: chỉ có Query (list/detail), chưa có Command (add/update/delete) — video hiện tại trong DB là seed giả (`DevDataSeeder`), backend job đồng bộ thật chưa build.
+- Video: FE chỉ có Query (list/detail), không có Command (add/update/delete). Video được tạo/cập nhật từ `POST /api/channels/{id}/sync`; job chạy lịch tự động và Metrics Update Job vẫn chưa expose API cho FE.
 </content>

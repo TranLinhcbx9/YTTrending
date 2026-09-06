@@ -11,13 +11,13 @@ TRACKING ─────┘
 
 Video vừa phát hiện, đã đạt `MinViewsThreshold`.
 
-Có thể chuyển thẳng sang ARCHIVED mà **không** qua TRACKING — nếu video rớt khỏi recent list (`RecentShortsLimit`) trước khi kịp `VideoStateRules.StartTracking()`. `VideoStateRules.Archive()` chỉ chặn khi đã ARCHIVED (terminal-state), không giới hạn trạng thái nguồn — tránh video kẹt vĩnh viễn ở NEW.
+Có thể chuyển thẳng sang ARCHIVED mà **không** qua TRACKING — nếu video ra khỏi `RecentDays` trước khi kịp `VideoStateRules.StartTracking()`. `VideoStateRules.Archive()` chỉ chặn khi đã ARCHIVED (terminal-state), không giới hạn trạng thái nguồn — tránh video kẹt vĩnh viễn ở NEW.
 
 ## TRACKING
 
 Đang được theo dõi metrics.
 
-Điều kiện vào TRACKING = **Video Tracking Rule** (`RecentDays` OR `RecentShortsLimit`) — rule đầy đủ ở [`discovery-engine.md`](discovery-engine.md).
+Điều kiện vào TRACKING = **Video Tracking Rule** (trong `RecentDays`, qualify và nằm trong quota) — rule đầy đủ ở [`discovery-engine.md`](discovery-engine.md).
 
 ## ARCHIVED
 
