@@ -8,6 +8,12 @@ namespace YTTrending.Infrastructure.YouTube;
 
 public sealed class YouTubeClient(HttpClient http, IOptions<TrackingOptions> trackingOptions, IOptions<YouTubeOptions> youtubeOptions) : IYouTubeClient
 {
+    /// <summary>
+    /// Giới hạn cứng của YouTube Data API: videos.list nhận tối đa 50 id mỗi request.
+    /// Không phải thông số cấu hình được — nâng lên sẽ nhận 400 từ API.
+    /// </summary>
+    private const int MaxVideoIdsPerRequest = 50;
+
     private readonly TrackingOptions _tracking = trackingOptions.Value;
     private readonly string _apiKey = youtubeOptions.Value.ApiKey;
     public async Task<ChannelInfo?> GetChannelAsync(string youtubeHandle, CancellationToken ct)
@@ -63,9 +69,9 @@ public sealed class YouTubeClient(HttpClient http, IOptions<TrackingOptions> tra
         if (videoIds.Count == 0)
             return [];
 
-        // 2. Lấy chi tiết (duration, statistics, snippet) cho từng video, chia lô 50
+        // 2. Lấy chi tiết (duration, statistics, snippet) cho từng video, chia lô theo giới hạn API
         var result = new List<ShortVideoInfo>();
-        foreach (var chunk in videoIds.Chunk(50))
+        foreach (var chunk in videoIds.Chunk(MaxVideoIdsPerRequest))
         {
             var idsParam = string.Join(",", chunk);
             // liveStreamingDetails đi chung request — thêm part KHÔNG tốn thêm quota (quota tính theo request)

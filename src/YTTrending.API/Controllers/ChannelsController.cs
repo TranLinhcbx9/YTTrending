@@ -3,6 +3,7 @@ using YTTrending.Application.Features.Channels.Commands.DeleteChannel;
 using YTTrending.Application.Features.Channels.Commands.UpdateChannel;
 using YTTrending.Application.Features.Channels.Queries.GetChannelById;
 using YTTrending.Application.Features.Channels.Queries.GetChannels;
+using YTTrending.Application.Features.Jobs.SyncChannel;
 
 namespace YTTrending.API.Controllers;
 
@@ -29,4 +30,8 @@ public sealed class ChannelsController(ISender sender) : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
         => (await sender.Send(new DeleteChannelCommand(id), ct)).ToActionResult();
+
+    [HttpPost("{id:int}/sync")]
+    public async Task<IActionResult> Sync(int id, CancellationToken ct)
+    => (await sender.Send(new SyncChannelCommand(id), ct)).ToActionResult();
 }

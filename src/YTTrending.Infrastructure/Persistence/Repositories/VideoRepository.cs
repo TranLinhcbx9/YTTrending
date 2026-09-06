@@ -1,5 +1,6 @@
 using YTTrending.Application.Common.Extensions;
 using YTTrending.Application.Common.Models;
+using YTTrending.Domain.Enums;
 
 namespace YTTrending.Infrastructure.Persistence.Repositories;
 
@@ -18,4 +19,6 @@ public sealed class VideoRepository(YTTrendingDbContext db)
 
     public Task<Video?> GetByIdWithChannelAsync(int id, CancellationToken ct) =>
         Set.Include(v => v.Channel).FirstOrDefaultAsync(v => v.Id == id, ct);
+    public Task<List<Video>> GetActiveByChannelIdAsync(int channelId, CancellationToken ct) =>
+    Set.Where(v => v.ChannelId == channelId && v.Status != VideoStatus.Archived).ToListAsync(ct);
 }

@@ -19,6 +19,8 @@ public static class DependencyInjection
         services.AddScoped<IVideoRepository, VideoRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
+        services.AddSingleton<IChannelSyncLock, ChannelSyncLock>();
+
         if (configuration.GetValue("YouTube:UseFake", true))
         {
             services.AddSingleton<IYouTubeClient, FakeYouTubeClient>();
