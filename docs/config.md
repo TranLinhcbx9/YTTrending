@@ -7,6 +7,7 @@ Toàn bộ thông số hệ thống không hardcode, có thể cấu hình.
 ```json
 {
   "SyncIntervalHours": 6,
+  "ManualSyncCooldownHours": 0.001,
   "MetricsUpdateIntervalHours": 6,
   "RecentDays": 7,
   "MaxQualifiedVideosPerChannel": 20,
@@ -23,6 +24,8 @@ Chu kỳ Sync Channel Job (discovery — phát hiện video mới) và Metrics U
 - 1h / 3h / 6h / 12h / 24h
 
 `SyncIntervalHours` và `MetricsUpdateIntervalHours` là **2 config độc lập** (tách theo [`decisions.md`](decisions.md) mục *Background job thật*, 01/09/2026) — trước đó gộp chung, snapshot ăn theo chu kỳ sync.
+
+`ManualSyncCooldownHours` là khoảng cách tối thiểu giữa hai lần bấm sync thủ công cho cùng một channel (kể cả channel sync riêng hay thuộc manual SyncRun). Scheduled SyncRun dùng `SyncIntervalHours`, không dùng cooldown manual.
 
 ### Video Tracking Rule
 

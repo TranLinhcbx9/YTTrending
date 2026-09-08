@@ -187,7 +187,7 @@ Validate: `id > 0`, `name` bắt buộc, `url` bắt buộc + phải là absolut
 }
 ```
 
-Khi channel đang được một request khác sync, server trả `409` với code `channel.syncInProgress`. `id <= 0` trả validation error `400`; id không tồn tại trả `404` với code `channel.notFound`.
+Khi channel đang được một request khác sync, server trả `409` với code `channel.syncInProgress`; khi chưa hết cooldown thủ công, trả `409` với code `channel.syncTooSoon`. `id <= 0` trả validation error `400`; id không tồn tại trả `404` với code `channel.notFound`.
 
 ### Query params — `GET /api/videos`
 
@@ -208,6 +208,7 @@ Khi channel đang được một request khác sync, server trả `409` với co
 | `channel.notFound` | Không tìm thấy channel (theo id, hoặc theo YoutubeChannelId khi add) | 404 |
 | `channel.exists` | Add channel trùng (đã theo dõi rồi) | 409 |
 | `channel.syncInProgress` | Có request sync khác đang chạy cho cùng channel | 409 |
+| `channel.syncTooSoon` | Channel chưa hết cooldown sync thủ công | 409 |
 | `video.notFound` | Không tìm thấy video theo id | 404 |
 | `validation.failed` | FluentValidation fail (mọi command có validator) | 400 |
 | `server.error` | Exception chưa lường trước | 500 |
