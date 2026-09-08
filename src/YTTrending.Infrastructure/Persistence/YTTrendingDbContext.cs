@@ -8,6 +8,8 @@ public class YTTrendingDbContext(DbContextOptions<YTTrendingDbContext> options, 
     public DbSet<VideoMetricSnapshot> VideoMetricSnapshots => Set<VideoMetricSnapshot>();
     public DbSet<TrendingScore> TrendingScores => Set<TrendingScore>();
     public DbSet<SavedIdea> SavedIdeas => Set<SavedIdea>();
+    public DbSet<SyncRun> SyncRuns => Set<SyncRun>();
+    public DbSet<SyncRunItem> SyncRunItems => Set<SyncRunItem>();   
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
