@@ -1,3 +1,4 @@
+using YTTrending.Application.Common.Models.Results;
 using YTTrending.Application.Features.Jobs.Dtos;
 
 namespace YTTrending.Application.Features.Jobs.Commands.SyncChannel;

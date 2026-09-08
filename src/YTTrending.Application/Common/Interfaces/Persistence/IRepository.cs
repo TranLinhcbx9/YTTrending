@@ -1,4 +1,4 @@
-namespace YTTrending.Application.Common.Interfaces;
+namespace YTTrending.Application.Common.Interfaces.Persistence;
 
 /// <summary>CRUD tối thiểu. KHÔNG thêm IQueryable/Find (→ generic-repo anti-pattern), KHÔNG Update (sửa = track+SaveChanges).</summary>
 public interface IRepository<T> where T : class

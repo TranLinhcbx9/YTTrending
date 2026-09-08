@@ -1,4 +1,4 @@
-namespace YTTrending.Application.Common.Interfaces;
+namespace YTTrending.Application.Common.Interfaces.Persistence;
 
 public interface IUnitOfWork
 {

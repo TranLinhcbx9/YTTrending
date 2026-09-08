@@ -1,4 +1,4 @@
-namespace YTTrending.Application.Common.Interfaces;
+namespace YTTrending.Application.Common.Interfaces.Concurrency;
 
 public interface IChannelSyncLock
 {

@@ -1,3 +1,4 @@
+using YTTrending.Application.Common.Models.Results;
 using YTTrending.Application.Features.Channels.Dtos;
 
 namespace YTTrending.Application.Features.Channels.Queries.GetChannelById;

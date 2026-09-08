@@ -1,4 +1,4 @@
-namespace YTTrending.Application.Common.Models;
+namespace YTTrending.Application.Common.Models.Pagination;
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount)
 {

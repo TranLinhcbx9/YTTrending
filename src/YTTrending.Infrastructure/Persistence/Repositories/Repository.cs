@@ -1,4 +1,5 @@
-
+using YTTrending.Application.Common.Interfaces.Persistence;
+using YTTrending.Infrastructure.Persistence;
 
 namespace YTTrending.Infrastructure.Persistence.Repositories;
 public class Repository<T>(YTTrendingDbContext db) : IRepository<T> where T : class

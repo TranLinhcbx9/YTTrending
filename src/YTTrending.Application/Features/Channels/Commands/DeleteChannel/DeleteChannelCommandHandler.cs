@@ -1,5 +1,5 @@
-
-using YTTrending.Application.Common.Interfaces;
+using YTTrending.Application.Common.Interfaces.Persistence;
+using YTTrending.Application.Common.Models.Results;
 
 namespace YTTrending.Application.Features.Channels.Commands.DeleteChannel;
 public sealed class DeleteChannelCommandHandler (IChannelRepository channels, IUnitOfWork uow) : IRequestHandler<DeleteChannelCommand, Result>

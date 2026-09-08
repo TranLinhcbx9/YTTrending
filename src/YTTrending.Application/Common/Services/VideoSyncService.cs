@@ -1,4 +1,8 @@
 using YTTrending.Application.Common.Interfaces;
+using YTTrending.Application.Common.Interfaces.Persistence;
+using YTTrending.Application.Common.Interfaces.Services;
+using YTTrending.Application.Common.Models.Sync;
+using YTTrending.Application.Common.Models.Youtube;
 using YTTrending.Application.Common.Options;
 
 namespace YTTrending.Application.Common.Services;

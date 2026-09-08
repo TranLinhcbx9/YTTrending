@@ -1,5 +1,6 @@
-
-using YTTrending.Application.Common.Interfaces;
+using YTTrending.Application.Common.Interfaces.Integrations;
+using YTTrending.Application.Common.Interfaces.Persistence;
+using YTTrending.Application.Common.Models.Results;
 using YTTrending.Application.Features.Channels.Dtos;
 
 namespace YTTrending.Application.Features.Channels.Commands.AddChannel;

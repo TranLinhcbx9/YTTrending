@@ -1,7 +1,8 @@
 using System.Text.Json;
 using System.Xml;
 using Microsoft.Extensions.Options;
-using YTTrending.Application.Common.Models;
+using YTTrending.Application.Common.Interfaces.Integrations;
+using YTTrending.Application.Common.Models.Youtube;
 using YTTrending.Application.Common.Options;
 
 namespace YTTrending.Infrastructure.YouTube;

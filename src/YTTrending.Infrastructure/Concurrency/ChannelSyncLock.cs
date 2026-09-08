@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
+using YTTrending.Application.Common.Interfaces.Concurrency;
 
-namespace YTTrending.Infrastructure.Common;
+namespace YTTrending.Infrastructure.Concurrency;
 
 public sealed class ChannelSyncLock : IChannelSyncLock
 {

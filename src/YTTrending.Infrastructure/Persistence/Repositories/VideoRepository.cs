@@ -1,6 +1,9 @@
 using YTTrending.Application.Common.Extensions;
-using YTTrending.Application.Common.Models;
+using YTTrending.Application.Common.Interfaces.Persistence;
+using YTTrending.Application.Common.Models.Filters;
+using YTTrending.Application.Common.Models.Pagination;
 using YTTrending.Domain.Enums;
+using YTTrending.Infrastructure.Persistence;
 
 namespace YTTrending.Infrastructure.Persistence.Repositories;
 

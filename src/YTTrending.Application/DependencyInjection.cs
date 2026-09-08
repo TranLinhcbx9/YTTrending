@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using YTTrending.Application.Common.Behaviors;
 using YTTrending.Application.Common.Interfaces;
+using YTTrending.Application.Common.Interfaces.Services;
 using YTTrending.Application.Common.Options;
 using YTTrending.Application.Common.Services;
 

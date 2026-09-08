@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using YTTrending.Application.Common.Models.Results;
 
 namespace YTTrending.Application.Common.Behaviors;
 

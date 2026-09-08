@@ -1,4 +1,4 @@
-namespace YTTrending.Application.Common.Models;
+namespace YTTrending.Application.Common.Models.Sync;
 
 public sealed record VideoSyncResult(
     int NewlyDiscoveredCount,

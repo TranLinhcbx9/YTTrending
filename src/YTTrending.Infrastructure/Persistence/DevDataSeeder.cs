@@ -1,4 +1,5 @@
-using YTTrending.Application.Common.Models;
+using YTTrending.Application.Common.Interfaces.Persistence;
+using YTTrending.Application.Common.Models.Filters;
 
 namespace YTTrending.Infrastructure.Persistence;
 

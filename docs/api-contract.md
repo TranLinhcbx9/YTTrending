@@ -77,7 +77,7 @@ Không đi qua `Error`/`ErrorType` — do `GlobalExceptionHandler` xử lý riê
 
 ## 5. Phân trang
 
-### Request — query params (`PagedQuery` base, `Common/Models/PagedQuery.cs`)
+### Request — query params (`PagedQuery` base, `Common/Models/Pagination/PagedQuery.cs`)
 
 | Param | Default | Giới hạn |
 |---|---|---|

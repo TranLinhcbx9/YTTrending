@@ -55,10 +55,22 @@ src/
 │
 ├── YTTrending.Application/
 │   ├── Common/
-│   │   ├── Interfaces/     IRepository<T>/IChannelRepository/IUnitOfWork, IYouTubeClient
+│   │   ├── Interfaces/
+│   │   │   ├── Concurrency/  IChannelSyncLock, ISyncRunCreationLock
+│   │   │   ├── Integrations/ IYouTubeClient
+│   │   │   ├── Jobs/         ISyncRunQueue
+│   │   │   ├── Persistence/  IRepository<T>, aggregate repositories, IUnitOfWork
+│   │   │   └── Services/     IShortsDiscoveryService, IVideoSyncService
+│   │   ├── Models/
+│   │   │   ├── Results/      Error, Result
+│   │   │   ├── Pagination/   PagedQuery, PagedResult
+│   │   │   ├── Filter/       ChannelFilter, VideoFilter, SyncRunItemFilter
+│   │   │   ├── Youtube/      ChannelInfo, ShortVideoInfo, ShortsPage, VideoStats
+│   │   │   └── Sync/         ShortsDiscoveryResult, VideoSyncResult
 │   │   ├── Behaviors/      LoggingBehavior, ValidationBehavior
 │   │   ├── Options/        TrackingOptions, TrendingOptions
-│   │   └── Result.cs, Error.cs
+│   │   ├── Services/       application-service implementations
+│   │   └── VideoStateRules.cs
 │   └── Features/
 │       ├── Channels/       Commands/ (AddChannel, ToggleChannel) + Queries/
 │       ├── Videos/         Queries/ (GetDashboard, GetVideoDetail)
@@ -69,9 +81,14 @@ src/
 │   ├── Persistence/
 │   │   ├── YTTrendingDbContext.cs
 │   │   ├── Configurations/     IEntityTypeConfiguration<T>
-│   │   └── Migrations/
-│   ├── YouTube/                YouTubeClient (typed HttpClient)
-│   ├── BackgroundJobs/         SyncChannelJob, MetricsUpdateJob, CleanupJob
+│   │   ├── Repositories/
+│   │   └── Migrations/          EF-generated only
+│   ├── Concurrency/            ChannelSyncLock, SyncRunCreationLock
+│   ├── YouTube/                YouTubeClient, FakeYouTubeClient
+│   ├── Jobs/
+│   │   ├── Sync/                SyncRunQueue, SyncRunWorker, SyncChannelJob
+│   │   ├── Metrics/             MetricsUpdateJob
+│   │   └── Cleanup/             CleanupJob
 │   └── DependencyInjection.cs
 │
 └── YTTrending.API/
@@ -101,12 +118,14 @@ Một feature = một folder, chứa Command/Query + Handler + Validator cạnh 
   - Trending Engine — [`domain/trending-engine.md`](domain/trending-engine.md)
   - Job orchestration — [`domain/background-jobs.md`](domain/background-jobs.md)
 - Khai báo interface ra ngoài: `IYouTubeClient` + Repository pattern (`IRepository<T>` base, repository riêng theo aggregate như `IChannelRepository`) + `IUnitOfWork` — pattern chuẩn từ mục 6, xem [`decisions.md`](decisions.md).
+- `Common/Models` chỉ chứa contract dùng chung; payload/DTO một feature sở hữu nằm cạnh feature trong `Features/<Feature>/Dtos/`. Thư mục chi tiết và quy tắc xếp file xem [`coding-convention.md`](coding-convention.md) mục 4.
 - Bind + validate Options — xem [`config.md`](config.md).
 
 ### YTTrending.Infrastructure
 - `YTTrendingDbContext : DbContext` + Fluent API configurations + migrations.
 - `YouTubeClient` (typed `HttpClient` + resilience handler).
 - 3 `BackgroundService` cho Sync / Metrics / Cleanup.
+- Lock in-memory nằm ở `Concurrency/`; queue, worker và scheduler sync nằm ở `Jobs/Sync/`, không dùng folder `Common/` chung chung.
 - `DependencyInjection.cs`: một extension `AddInfrastructure(config)` gom toàn bộ đăng ký.
 
 ### YTTrending.API
@@ -141,7 +160,7 @@ Ba kiểu: `Result` (command không trả gì — tránh `Result<bool>`), `Resul
 
 `Error` mang **`ErrorType`** (Validation/NotFound/Conflict) chứ không phải `string` đơn thuần — nhờ đó `ResultExtensions.ToActionResult` (API, mục 5) map sang HTTP status (200/404/409/400) ở **một chỗ duy nhất**.
 
-→ Code thật: [`../src/YTTrending.Application/Common/Models/Result.cs`](../src/YTTrending.Application/Common/Models/Result.cs) + [`Error.cs`](../src/YTTrending.Application/Common/Models/Error.cs). Lý do 3 quyết định (Value throw · private ctor · bỏ implicit) + phương án bị loại: [`decisions.md`](decisions.md) mục *Application — mục 3, Batch 1*.
+→ Code thật: [`../src/YTTrending.Application/Common/Models/Results/Result.cs`](../src/YTTrending.Application/Common/Models/Results/Result.cs) + [`Error.cs`](../src/YTTrending.Application/Common/Models/Results/Error.cs). Lý do 3 quyết định (Value throw · private ctor · bỏ implicit) + phương án bị loại: [`decisions.md`](decisions.md) mục *Application — mục 3, Batch 1*.
 
 ## Pipeline Behaviors — chỉ 2 cái
 

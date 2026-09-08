@@ -1,5 +1,7 @@
+using YTTrending.Application.Common.Models.Filters;
+using YTTrending.Application.Common.Models.Pagination;
 
-namespace YTTrending.Application.Common.Interfaces;
+namespace YTTrending.Application.Common.Interfaces.Persistence;
 public interface IVideoRepository : IRepository<Video>
 {
     Task<PagedResult<Video>> GetPagedAsync(VideoFilter filter, CancellationToken ct);

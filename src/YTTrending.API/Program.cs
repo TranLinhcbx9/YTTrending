@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;   // MigrateAsync
 using Serilog;                         // UseSerilog / UseSerilogRequestLogging
-using YTTrending.Application.Common.Interfaces;   // IChannelRepository / IUnitOfWork cho seed
+using YTTrending.Application.Common.Interfaces.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 

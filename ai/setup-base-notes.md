@@ -159,7 +159,7 @@ Những thứ **mọi feature đều đụng tới**. Làm ở base thì viết 
 
 Dashboard có thể tới ~5.000 video (50 channel × 100 video đang track). Trả hết một lần là hỏng cả API lẫn Angular. Và vì FE là project riêng, **hình dạng response phải chốt ngay từ base** — đổi sau là sửa cả hai đầu.
 
-Code thật: [`../src/YTTrending.Application/Common/Models/PagedResult.cs`](../src/YTTrending.Application/Common/Models/PagedResult.cs), [`PagedQuery.cs`](../src/YTTrending.Application/Common/Models/PagedQuery.cs), [`Extensions/QueryableExtensions.cs`](../src/YTTrending.Application/Common/Extensions/QueryableExtensions.cs). Bản đầu của mục này **lệch 3 chỗ** so với code cuối — giữ lại đây vì là cạm bẫy dễ gõ nhầm theo trí nhớ:
+Code thật: [`../src/YTTrending.Application/Common/Models/Pagination/PagedResult.cs`](../src/YTTrending.Application/Common/Models/Pagination/PagedResult.cs), [`PagedQuery.cs`](../src/YTTrending.Application/Common/Models/Pagination/PagedQuery.cs), [`Extensions/QueryableExtensions.cs`](../src/YTTrending.Application/Common/Extensions/QueryableExtensions.cs). Bản đầu của mục này **lệch 3 chỗ** so với code cuối — giữ lại đây vì là cạm bẫy dễ gõ nhầm theo trí nhớ:
 
 **Ba chỗ code thật khác sketch ban đầu** — nếu đọc lại notes rồi gõ theo trí nhớ thì sẽ ra bản cũ:
 
@@ -179,13 +179,13 @@ Bốn lưu ý:
 
 ### A15. Result pattern — bản đầy đủ ✅ (code xong ở Batch 1, 12/08/2026)
 
-Bản phác đầu chỉ có `Result<T>`; **code thật** ở [`../src/YTTrending.Application/Common/Models/Result.cs`](../src/YTTrending.Application/Common/Models/Result.cs) + [`Error.cs`](../src/YTTrending.Application/Common/Models/Error.cs) (dời vào `Models/` ở Batch 2 — xem luật xếp folder cuối S3) bổ sung 3 điểm:
+Bản phác đầu chỉ có `Result<T>`; **code thật** ở [`../src/YTTrending.Application/Common/Models/Results/Result.cs`](../src/YTTrending.Application/Common/Models/Results/Result.cs) + [`Error.cs`](../src/YTTrending.Application/Common/Models/Results/Error.cs) (dời vào `Models/` ở Batch 2 — xem luật xếp folder cuối S3) bổ sung 3 điểm:
 
 **(1) `Result` không generic** — cho command không trả gì (`ToggleChannel`, `DeleteSavedIdea`). Không có thì phải viết `Result<bool>` hoặc `Result<Unit>` khắp nơi, xấu và vô nghĩa.
 
 **(2) `Error` chứa được nhiều lỗi field** — FluentValidation trả về một **danh sách** lỗi theo từng field, còn `Error` hiện tại chỉ có 1 `Message`. `ValidationBehavior` sẽ phải nuốt bớt lỗi, và Angular không hiển thị được lỗi dưới từng ô input.
 
-→ Code thật: [`../src/YTTrending.Application/Common/Models/Error.cs`](../src/YTTrending.Application/Common/Models/Error.cs) — `Error` + `Error.Fields` + factory `Validation(fields)`.
+→ Code thật: [`../src/YTTrending.Application/Common/Models/Results/Error.cs`](../src/YTTrending.Application/Common/Models/Results/Error.cs) — `Error` + `Error.Fields` + factory `Validation(fields)`.
 
 **(3) Implicit conversion — đã cân nhắc rồi BỎ.** Bản đầu định thêm `implicit operator Result<T>(T)` để handler viết `return channel.Id;` thay vì `return Result<int>.Success(channel.Id);`. Bỏ vì mất khả năng đọc/grep: dòng `return channel.Id;` không có chữ nào cho biết đang tạo `Result<int>`, và text-search không tìm ra chỗ construct. Handler luôn gọi tường minh `Result<T>.Success(...)`/`Failure(...)`. Xem [`../docs/decisions.md`](../docs/decisions.md) mục *Application — mục 3, Batch 1*.
 
@@ -406,22 +406,22 @@ Invariant vi phạm ném `InvalidOperationException`, không tạo `DomainExcept
 
 ### S3. Application — phần Common
 
-- [x] `Common/Models/Result.cs`, `Common/Models/Error.cs` — bản đầy đủ: thêm `Result` không generic + `Error.Fields`. **Không** implicit conversion (A15 đề xuất rồi bỏ — [`../docs/decisions.md`](../docs/decisions.md) mục *Batch 1*)
-- [x] `Common/Models/PagedResult.cs`, `Common/Models/PagedQuery.cs` (A14)
+- [x] `Common/Models/Results/Result.cs`, `Common/Models/Results/Error.cs` — bản đầy đủ: thêm `Result` không generic + `Error.Fields`. **Không** implicit conversion (A15 đề xuất rồi bỏ — [`../docs/decisions.md`](../docs/decisions.md) mục *Batch 1*)
+- [x] `Common/Models/Pagination/PagedResult.cs`, `Common/Models/Pagination/PagedQuery.cs` (A14)
 - [x] `Common/Extensions/QueryableExtensions.cs` — `ToPagedResultAsync`, `WhereIf` (A14, A17)
 - [x] `Common/Interfaces/IYTTrendingDbContext.cs` — 5 `DbSet<T>` + `SaveChangesAsync` *(làm sớm ở mục 4 vì `YTTrendingDbContext` cần implement nó)*
-- [x] `Common/Interfaces/IYouTubeClient.cs` — signature ban đầu gồm `GetChannelAsync`, `GetRecentShortsAsync(limit)` và `GetVideoStatsAsync`. 3 DTO ở `Common/Models/YouTubeModels.cs`. **Đã thay ở Discovery 06/09/2026**: `GetRecentShortsPageAsync(uploadsPlaylistId, pageToken, ct)` trả `ShortsPage` để handler áp dụng `RecentDays`/quota; xem [`../docs/decisions.md`](../docs/decisions.md) mục *Background job thật*.
+- [x] `Common/Interfaces/Integrations/IYouTubeClient.cs` — signature ban đầu gồm `GetChannelAsync`, `GetRecentShortsAsync(limit)` và `GetVideoStatsAsync`. 3 DTO ở `Common/Models/Youtube/YouTubeModels.cs`. **Đã thay ở Discovery 06/09/2026**: `GetRecentShortsPageAsync(uploadsPlaylistId, pageToken, ct)` trả `ShortsPage` để handler áp dụng `RecentDays`/quota; xem [`../docs/decisions.md`](../docs/decisions.md) mục *Background job thật*.
 - [x] `Common/Behaviors/`: `LoggingBehavior`, `ValidationBehavior` (gom lỗi vào `Error.Fields`) — fail → `Result.Failure` qua reflection (ràng `where TResponse : IResult`), key `fields` camelCase chuyển tại nguồn. Xem [`../docs/decisions.md`](../docs/decisions.md) mục *Batch 5*
 - [x] `Common/Options/`: `TrackingOptions`, `TrendingOptions`, `JobOptions` — kèm DataAnnotations (`[Range]`) để `ValidateOnStart` bắt được
 - [x] `DependencyInjection.cs` → `AddApplication()`
 
-**Luật xếp folder trong `Common/`** (chốt ở Batch 2, sau khi chính mục này tự mâu thuẫn — `Common/Result.cs` ở root nhưng `Common/Models/PagedResult.cs` trong folder, dù cả bốn đều là record mang dữ liệu):
+**Luật xếp folder trong `Common/`** (cấu trúc chi tiết hiện hành xem [`../docs/coding-convention.md`](../docs/coding-convention.md) mục 4):
 
-- **`Models/`** — mọi type dữ liệu: `Error`, `Result`, `PagedResult`, `PagedQuery`, và DTO dùng chung nếu có.
-- **Folder còn lại chia theo vai trò**, không theo "là type gì": `Interfaces/`, `Options/`, `Extensions/`, `Behaviors/`.
-- **Root** chỉ giữ thứ không rơi vào hai nhóm trên — hiện là `VideoStateRules.cs` (static class chứa rule, không phải type dữ liệu, cũng không phải vai trò hạ tầng).
+- **`Models/`** — contract dùng chung, chia theo nhóm ổn định: `Results/`, `Pagination/`, `Filter/`, `Youtube/`, `Sync/`. DTO một feature vẫn nằm trong `Features/<Feature>/Dtos/`.
+- **`Interfaces/`** chia theo capability: `Concurrency/`, `Integrations/`, `Jobs/`, `Persistence/`, `Services/`; folder còn lại theo vai trò (`Options/`, `Extensions/`, `Behaviors/`, `Services/`).
+- **Root** chỉ giữ thứ không rơi vào các nhóm trên — hiện là `VideoStateRules.cs`.
 
-Type mới sinh ra sau này cứ theo thứ tự đó mà xếp: là dữ liệu → `Models/`; phục vụ một vai trò hạ tầng → folder vai trò; không cả hai → root.
+Không tạo folder chưa có nhóm ổn định chỉ để chứa một type. Lý do và ranh giới Application/Infrastructure xem [`../docs/decisions.md`](../docs/decisions.md) mục *Application / Infrastructure — cấu trúc folder*.
 
 ✅ Nghiệm thu: build sạch. Application **không** reference Npgsql.
 

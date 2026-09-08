@@ -1,5 +1,5 @@
 using System.Linq.Expressions;
-using YTTrending.Application.Common.Models;
+using YTTrending.Application.Common.Models.Pagination;
 
 namespace YTTrending.Application.Common.Extensions;
 

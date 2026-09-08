@@ -1,4 +1,5 @@
-using YTTrending.Application.Common.Models;
+using YTTrending.Application.Common.Interfaces.Integrations;
+using YTTrending.Application.Common.Models.Youtube;
 
 namespace YTTrending.Infrastructure.YouTube;
 

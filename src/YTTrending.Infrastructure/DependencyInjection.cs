@@ -1,3 +1,7 @@
+using YTTrending.Application.Common.Interfaces.Concurrency;
+using YTTrending.Application.Common.Interfaces.Integrations;
+using YTTrending.Application.Common.Interfaces.Persistence;
+using YTTrending.Infrastructure.Concurrency;
 using YTTrending.Infrastructure.Persistence;
 using YTTrending.Infrastructure.Persistence.Repositories;
 using YTTrending.Infrastructure.YouTube;

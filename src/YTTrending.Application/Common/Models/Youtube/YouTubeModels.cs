@@ -1,4 +1,4 @@
-namespace YTTrending.Application.Common.Models;
+namespace YTTrending.Application.Common.Models.Youtube;
 
 /// <summary>
 /// Khớp đúng 3 field required của entity Channel — handler gán thẳng, không phải bịa.

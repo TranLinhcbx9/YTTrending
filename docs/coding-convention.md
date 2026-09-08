@@ -41,8 +41,10 @@ Chỉ nhắc, **không chép lại rule**: file-scoped namespace · `using` ngo�
 ## 4. Cấu trúc feature & thư mục
 
 - **1 feature = 1 folder** `Features/<Domain>/Commands|Queries/<Name>/` — Command/Query + Handler + Validator cạnh nhau; sửa 1 tính năng mở đúng 1 folder.
-- **Luật xếp `Common/`**: type dữ liệu → `Models/`; còn lại theo vai trò (`Interfaces`/`Options`/`Extensions`/`Behaviors`); root chỉ giữ thứ không thuộc 2 nhóm (hiện là `VideoStateRules`).
-- Persistence: EF config ở `Persistence/Configurations/`, migration ở `Persistence/Migrations/`.
+- **Luật xếp `Application/Common/`**: type dữ liệu → `Models/`; các nhóm dữ liệu ổn định dùng `Results/`, `Pagination/`, `Filter/`, `Youtube/`, `Sync/`. DTO trả trực tiếp cho FE vẫn thuộc `Features/<Feature>/Dtos/`; chỉ contract dùng xuyên feature mới vào `Common/Models/`.
+- **Interface Application** chia theo capability: `Concurrency/`, `Integrations/`, `Jobs/`, `Persistence/`, `Services/`. `IChannelSyncLock` và `ISyncRunCreationLock` thuộc `Concurrency/`; queue thuộc `Jobs/`.
+- Còn lại trong `Common/` theo vai trò (`Options`/`Extensions`/`Behaviors`/`Services`); root chỉ giữ thứ không thuộc các nhóm trên (hiện là `VideoStateRules`). Không tạo folder chỉ để chứa một type không có nhóm ổn định.
+- Infrastructure không dùng `Common/` làm folder hứng: lock ở `Concurrency/`; queue, worker và scheduler sync ở `Jobs/Sync/`; EF config ở `Persistence/Configurations/`, migration ở `Persistence/Migrations/`.
 
 ## 5. Handler (CQRS qua MediatR 12.x)
 

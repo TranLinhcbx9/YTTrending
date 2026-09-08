@@ -1,4 +1,4 @@
-using YTTrending.Application.Common.Models;
+using YTTrending.Application.Common.Models.Results;
 
 namespace YTTrending.API.Common;
 

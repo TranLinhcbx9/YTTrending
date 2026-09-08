@@ -1,4 +1,6 @@
-namespace YTTrending.Application.Common.Interfaces;
+using YTTrending.Application.Common.Models.Youtube;
+
+namespace YTTrending.Application.Common.Interfaces.Integrations;
 
 /// <summary>
 /// Interface cho gọi API ngoài (YouTube) — tách biệt khỏi Repository pattern dùng cho data access nội bộ,

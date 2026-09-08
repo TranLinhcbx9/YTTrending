@@ -1,5 +1,5 @@
-
-using YTTrending.Application.Common.Interfaces;
+using YTTrending.Application.Common.Interfaces.Persistence;
+using YTTrending.Application.Common.Models.Results;
 using YTTrending.Application.Features.Videos.Dtos;
 
 namespace YTTrending.Application.Features.Videos.Queries.GetVideoById;

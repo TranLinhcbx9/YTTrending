@@ -1,5 +1,10 @@
 using Microsoft.Extensions.Options;
 using YTTrending.Application.Common.Interfaces;
+using YTTrending.Application.Common.Interfaces.Concurrency;
+using YTTrending.Application.Common.Interfaces.Integrations;
+using YTTrending.Application.Common.Interfaces.Persistence;
+using YTTrending.Application.Common.Interfaces.Services;
+using YTTrending.Application.Common.Models.Results;
 using YTTrending.Application.Common.Options;
 using YTTrending.Application.Common.Services;
 using YTTrending.Application.Features.Channels;

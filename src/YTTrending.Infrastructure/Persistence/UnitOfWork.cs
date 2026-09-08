@@ -1,3 +1,4 @@
+using YTTrending.Application.Common.Interfaces.Persistence;
 
 namespace YTTrending.Infrastructure.Persistence;
 public sealed class UnitOfWork(YTTrendingDbContext db) : IUnitOfWork
