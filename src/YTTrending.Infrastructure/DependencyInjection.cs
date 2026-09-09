@@ -1,7 +1,9 @@
 using YTTrending.Application.Common.Interfaces.Concurrency;
 using YTTrending.Application.Common.Interfaces.Integrations;
+using YTTrending.Application.Common.Interfaces.Jobs;
 using YTTrending.Application.Common.Interfaces.Persistence;
 using YTTrending.Infrastructure.Concurrency;
+using YTTrending.Infrastructure.Jobs.Sync;
 using YTTrending.Infrastructure.Persistence;
 using YTTrending.Infrastructure.Persistence.Repositories;
 using YTTrending.Infrastructure.YouTube;
@@ -21,9 +23,15 @@ public static class DependencyInjection
 
         services.AddScoped<IChannelRepository, ChannelRepository>();
         services.AddScoped<IVideoRepository, VideoRepository>();
+        services.AddScoped<ISyncRunRepository, SyncRunRepository>();
+
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         services.AddSingleton<IChannelSyncLock, ChannelSyncLock>();
+        services.AddSingleton<ISyncRunQueue, SyncRunQueue>();
+        services.AddSingleton<ISyncRunCreationLock, SyncRunCreationLock>();
+
+
 
         if (configuration.GetValue("YouTube:UseFake", true))
         {

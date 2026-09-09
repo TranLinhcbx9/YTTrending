@@ -16,4 +16,9 @@ public sealed class ChannelRepository(YTTrendingDbContext db)
         => Set.AsNoTracking()
             .OrderByDescending(c => c.CreatedAt).ThenBy(c => c.Id)
             .ToPagedResultAsync(filter.Page, filter.PageSize, ct);
+    public Task<List<Channel>> GetEnabledAsync(CancellationToken ct)
+        => Set.AsNoTracking()
+            .OrderBy(x => x.Id)
+            .Where(c => c.IsEnabled == true).ToListAsync(ct);
+
 }
