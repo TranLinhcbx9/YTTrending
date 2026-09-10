@@ -11,4 +11,7 @@ public interface ISyncRunRepository : IRepository<SyncRun>
     Task<SyncRun?> GetByIdReadOnlyAsync(int id, CancellationToken ct);
     Task<PagedResult<SyncRunItem>> GetItemsPagedAsync(SyncRunItemFilter filter, CancellationToken ct);
     void CreateItems(IEnumerable<SyncRunItem> items);
+    Task<List<SyncRunItem>> GetPendingItemsAsync(int syncRunId, CancellationToken ct);
+    Task<List<SyncRun>> GetIncompleteAsync(CancellationToken ct);
+    Task<List<SyncRunItem>> GetIncompleteItemsAsync(IReadOnlyList<int> syncRunIds, CancellationToken ct);
 }

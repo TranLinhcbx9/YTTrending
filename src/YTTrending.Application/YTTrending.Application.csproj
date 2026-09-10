@@ -4,6 +4,12 @@
   <!-- Version của package: xem Directory.Packages.props -->
 
   <ItemGroup>
+    <Compile Remove="Features\Jobs\Commands\NewFolder\**" />
+    <EmbeddedResource Remove="Features\Jobs\Commands\NewFolder\**" />
+    <None Remove="Features\Jobs\Commands\NewFolder\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="MediatR" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />

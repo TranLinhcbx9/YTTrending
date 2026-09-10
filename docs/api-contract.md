@@ -21,7 +21,10 @@
 | `Result` (không có giá trị, vd Delete) | **204 No Content** | rỗng |
 | `Result<T>` thành công | **200 OK** | `T` trực tiếp — **không** bọc envelope |
 
-⚠️ Kể cả endpoint tạo mới (`POST /api/channels`) cũng trả **200**, không phải 201 — mọi `Result<T>` thành công đều map `OkObjectResult` (`ResultExtensions.cs`), không phân biệt create/read.
+⚠️ Kể cả endpoint tạo mới (`POST /api/channels`) cũng trả **200**, không phải 201 — các
+`Result<T>` thành công mặc định map `OkObjectResult` (`ResultExtensions.cs`), không phân biệt
+create/read. Ngoại lệ được ghi rõ ở endpoint: `POST /api/jobs/sync` trả **202 Accepted** để báo
+request đã được enqueue xử lý bất đồng bộ.
 
 ## 4. Response lỗi — `ProblemDetails` (RFC 7807)
 
@@ -112,6 +115,49 @@ Không đi qua `Error`/`ErrorType` — do `GlobalExceptionHandler` xử lý riê
 | DELETE | `/api/channels/{id}` | route `id` | 204 |
 | POST | `/api/channels/{id}/sync` | route `id`, không body | 200, `SyncChannelResultDto` |
 
+### Jobs — sync runs — `api/jobs`
+
+Sync-all chạy bất đồng bộ qua một `SyncRun`. Request tạo run chỉ snapshot các channel đang bật,
+lưu xong thì enqueue cho worker nội bộ và trả ngay; FE dùng `GET` để poll summary, rồi đọc danh
+sách item qua endpoint paged riêng. Worker chỉ xử lý một run và các item của run đó theo tuần tự.
+
+| Verb | Route | Request | Response thành công |
+|---|---|---|---|
+| POST | `/api/jobs/sync` | Không body; trigger luôn là `Manual` | **202**, `SyncRunDto` |
+| GET | `/api/jobs/sync/{id}` | route `id` | 200, `SyncRunDto` |
+| GET | `/api/jobs/sync/{id}/items` | route `id` + query `page`, `pageSize`, `status?` | 200, `PagedResult<SyncRunItemDto>` |
+
+`POST /api/jobs/sync` trả `409` với code `syncRun.inProgress` nếu đã có run ở trạng thái
+`Pending` hoặc `Running`, và trả `409` với code `syncRun.noEnabledChannels` nếu không có channel
+đang bật. `GET` với `id <= 0` trả validation `400`; không tìm thấy run trả `404` với code
+`syncRun.notFound`. Các route item cũng trả cùng lỗi `syncRun.notFound` nếu run không tồn tại.
+
+### Query params — `GET /api/jobs/sync/{id}/items`
+
+- `page`, `pageSize`: theo mục 5.
+- `status` (optional): `Pending` / `Running` / `Succeeded` / `Skipped` / `Failed`.
+- `id` trên route là nguồn duy nhất của `syncRunId`; query string không ghi đè được route.
+- Item được sắp xếp ổn định theo `id` tăng dần.
+
+### Vòng đời và recovery của SyncRun
+
+Sau response `202`, run có thể đang là `Pending` rồi chuyển rất nhanh sang `Running`; không suy
+ra progress từ riêng response tạo run mà hãy poll summary. Các trạng thái terminal của run là
+`Completed`, `CompletedWithIssues`, `Interrupted` và `Failed`.
+
+| Run status | Ý nghĩa cho FE |
+|---|---|
+| `Pending` | Đã lưu và đã enqueue, worker chưa bắt đầu. Tiếp tục poll. |
+| `Running` | Worker đang sync tuần tự từng channel. Tiếp tục poll. |
+| `Completed` | Mọi item đều `Succeeded`. Dừng poll. |
+| `CompletedWithIssues` | Mọi item đã kết thúc nhưng có ít nhất một `Skipped` hoặc `Failed`. Dừng poll, mở bảng kết quả. |
+| `Interrupted` | Ứng dụng đã restart/dừng khi run còn dang dở. Backend **không resume** run này; dừng poll và cho người dùng tạo run mới. |
+| `Failed` | Processor gặp lỗi cấp run. Dừng poll và hiển thị `errorMessage` cấp run nếu có. |
+
+Khi API khởi động, mọi run còn `Pending`/`Running` được mark `Interrupted`; item chưa kết thúc
+được mark `Skipped` với `errorCode` là `syncRun.interrupted`. Queue chỉ nằm trong memory nên không
+có endpoint hay cơ chế FE dùng để resume run cũ.
+
 ### Videos — `api/videos`
 
 | Verb | Route | Request | Response thành công |
@@ -187,6 +233,47 @@ Validate: `id > 0`, `name` bắt buộc, `url` bắt buộc + phải là absolut
 }
 ```
 
+### `SyncRunDto`
+
+```ts
+{
+  id: number;
+  triggerType: "Manual" | "Scheduled";
+  status: "Pending" | "Running" | "Completed" | "CompletedWithIssues" | "Interrupted" | "Failed";
+  totalCount: number;
+  successCount: number;
+  skippedCount: number;
+  failedCount: number;
+  processedCount: number;      // successCount + skippedCount + failedCount
+  errorCode: string | null;
+  errorMessage: string | null;
+  createdAt: string;           // DateTimeOffset ISO 8601
+  startedAt: string | null;    // DateTimeOffset ISO 8601
+  completedAt: string | null;  // DateTimeOffset ISO 8601
+}
+```
+
+### `SyncRunItemDto`
+
+```ts
+{
+  id: number;
+  syncRunId: number;
+  channelId: number;
+  channelName: string;         // snapshot tại lúc tạo run
+  status: "Pending" | "Running" | "Succeeded" | "Skipped" | "Failed" | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  startedAt: string | null;    // DateTimeOffset ISO 8601
+  completedAt: string | null;  // DateTimeOffset ISO 8601
+}
+```
+
+Ý nghĩa `SyncRunItemDto.status`: `Succeeded`, `Skipped` và `Failed` là terminal. `Skipped` dùng
+cho lỗi nghiệp vụ dự kiến của một channel (ví dụ đang sync, cooldown, hoặc channel đã bị xoá);
+`Failed` dùng cho lỗi thực thi/exception ở channel đó. DTO khai báo `status` nullable trên wire,
+nhưng item được tạo bởi backend hiện tại luôn có một status; FE vẫn nên render fallback cho `null`.
+
 Khi channel đang được một request khác sync, server trả `409` với code `channel.syncInProgress`; khi chưa hết cooldown thủ công, trả `409` với code `channel.syncTooSoon`. `id <= 0` trả validation error `400`; id không tồn tại trả `404` với code `channel.notFound`.
 
 ### Query params — `GET /api/videos`
@@ -210,6 +297,12 @@ Khi channel đang được một request khác sync, server trả `409` với co
 | `channel.syncInProgress` | Có request sync khác đang chạy cho cùng channel | 409 |
 | `channel.syncTooSoon` | Channel chưa hết cooldown sync thủ công | 409 |
 | `video.notFound` | Không tìm thấy video theo id | 404 |
+| `syncRun.inProgress` | Đã có một SyncRun đang Pending/Running | 409 |
+| `syncRun.noEnabledChannels` | Không có channel đang bật để tạo SyncRun | 409 |
+| `syncRun.notFound` | Không tìm thấy SyncRun theo id | 404 |
+| `syncRun.interrupted` | App restart/dừng, xuất hiện trong `errorCode` của run/item bị ngắt | — (body thành công) |
+| `syncRun.channelExecutionFailed` | Exception khi xử lý một channel, xuất hiện trong `errorCode` của item `Failed` | — (body thành công) |
+| `syncRun.executionFailed` | Lỗi cấp processor, xuất hiện ở run `Failed` và các item còn dang dở bị `Skipped` | — (body thành công) |
 | `validation.failed` | FluentValidation fail (mọi command có validator) | 400 |
 | `server.error` | Exception chưa lường trước | 500 |
 
@@ -219,5 +312,6 @@ Khi channel đang được một request khác sync, server trả `409` với co
 - CORS chỉ hoạt động ở Development — chưa có cấu hình cho production.
 - Không có `VideoDetailDto` riêng biệt — trang detail phải tự đủ dùng với `VideoDto`.
 - `POST` tạo resource trả `200`, không phải `201` — đừng dựa vào status code để phân biệt create/read.
-- Video: FE chỉ có Query (list/detail), không có Command (add/update/delete). Video được tạo/cập nhật từ `POST /api/channels/{id}/sync`; job chạy lịch tự động và Metrics Update Job vẫn chưa expose API cho FE.
+- Video: FE chỉ có Query (list/detail), không có Command (add/update/delete). Video được tạo/cập nhật từ `POST /api/channels/{id}/sync`; SyncRun worker xử lý Sync all theo polling API ở trên. Metrics Update Job vẫn chưa expose API cho FE.
+- SyncRun chưa có endpoint list history, cancel, retry hay resume. `POST /api/jobs/sync` chỉ tạo run mới; nếu nhận `syncRun.inProgress`, response không mang id của run đang chạy để FE chuyển sang theo dõi.
 </content>

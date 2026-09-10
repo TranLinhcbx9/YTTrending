@@ -31,7 +31,7 @@ public static class DependencyInjection
         services.AddSingleton<ISyncRunQueue, SyncRunQueue>();
         services.AddSingleton<ISyncRunCreationLock, SyncRunCreationLock>();
 
-
+        services.AddHostedService<SyncRunWorker>();
 
         if (configuration.GetValue("YouTube:UseFake", true))
         {

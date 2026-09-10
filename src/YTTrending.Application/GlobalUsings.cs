@@ -8,4 +8,6 @@ global using YTTrending.Domain.Enums;
 global using YTTrending.Application.Common;
 global using YTTrending.Application.Common.Extensions;
 global using YTTrending.Application.Common.Models.Results;
-global using YTTrending.Application.Common.Models.Results;
+global using YTTrending.Application.Common.Models.Pagination;
+global using YTTrending.Application.Common.Interfaces.Persistence;
+
