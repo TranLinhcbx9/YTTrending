@@ -314,4 +314,3 @@ Khi channel đang được một request khác sync, server trả `409` với co
 - `POST` tạo resource trả `200`, không phải `201` — đừng dựa vào status code để phân biệt create/read.
 - Video: FE chỉ có Query (list/detail), không có Command (add/update/delete). Video được tạo/cập nhật từ `POST /api/channels/{id}/sync`; SyncRun worker xử lý Sync all theo polling API ở trên. Metrics Update Job vẫn chưa expose API cho FE.
 - SyncRun chưa có endpoint list history, cancel, retry hay resume. `POST /api/jobs/sync` chỉ tạo run mới; nếu nhận `syncRun.inProgress`, response không mang id của run đang chạy để FE chuyển sang theo dõi.
-</content>

@@ -1,6 +1,7 @@
-using YTTrending.Application.Common.Models.Results;
 using YTTrending.Application.Features.Jobs.Dtos;
-
 namespace YTTrending.Application.Features.Jobs.Commands.SyncChannel;
 
-public sealed record SyncChannelCommand(int ChannelId) : IRequest<Result<SyncChannelResultDto>>;
+public sealed record SyncChannelCommand(
+    int ChannelId,
+    SyncRunTriggerType TriggerType = SyncRunTriggerType.Manual)
+    : IRequest<Result<SyncChannelResultDto>>;

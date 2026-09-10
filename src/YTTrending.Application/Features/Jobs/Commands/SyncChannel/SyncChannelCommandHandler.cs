@@ -1,12 +1,8 @@
 using Microsoft.Extensions.Options;
-using YTTrending.Application.Common.Interfaces;
 using YTTrending.Application.Common.Interfaces.Concurrency;
 using YTTrending.Application.Common.Interfaces.Integrations;
-using YTTrending.Application.Common.Interfaces.Persistence;
 using YTTrending.Application.Common.Interfaces.Services;
-using YTTrending.Application.Common.Models.Results;
 using YTTrending.Application.Common.Options;
-using YTTrending.Application.Common.Services;
 using YTTrending.Application.Features.Channels;
 using YTTrending.Application.Features.Jobs.Dtos;
 
@@ -43,7 +39,7 @@ public sealed class SyncChannelCommandHandler(
             var now = clock.GetUtcNow();
 
             // Lỗi cooldown dự kiến, null nghĩa là channel được phép sync.
-            var syncIntervalError = ValidateSyncInterval(channel, now, tracking);
+            var syncIntervalError = ValidateSyncInterval(channel, now, tracking, cmd.TriggerType);
             if (syncIntervalError is not null)
                 return Result<SyncChannelResultDto>.Failure(syncIntervalError);
 
@@ -78,13 +74,19 @@ public sealed class SyncChannelCommandHandler(
     /// <summary>
     /// Kiểm tra cooldown của channel; trả lỗi Conflict khi lượt sync trước còn trong khoảng tối thiểu.
     /// </summary>
-    private static Error? ValidateSyncInterval(Channel channel, DateTimeOffset now, TrackingOptions tracking)
+    private static Error? ValidateSyncInterval(
+        Channel channel,
+        DateTimeOffset now,
+        TrackingOptions tracking,
+        SyncRunTriggerType triggerType)
     {
-        if (channel.LastSyncAt is not { } lastSync
-            || now - lastSync >= TimeSpan.FromHours(tracking.ManualSyncCooldownHours))
-        {
+        // Manual là hành động chủ đích nên có cooldown riêng; scheduler theo chu kỳ SyncIntervalHours.
+        var cooldown = triggerType == SyncRunTriggerType.Manual
+            ? TimeSpan.FromHours(tracking.ManualSyncCooldownHours)
+            : TimeSpan.FromHours(tracking.SyncIntervalHours);
+
+        if (channel.LastSyncAt is not { } lastSync || now - lastSync >= cooldown)
             return null;
-        }
 
         return Error.Conflict(ChannelErrors.SyncTooSoon,
             $"Channel vừa sync lúc {lastSync:HH:mm dd/MM}, thử lại sau.");

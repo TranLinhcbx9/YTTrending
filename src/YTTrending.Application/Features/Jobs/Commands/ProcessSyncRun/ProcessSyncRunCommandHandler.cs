@@ -37,8 +37,7 @@ public sealed class ProcessSyncRunCommandHandler(
 
                 try
                 {
-                    // Chua truyền trigger; hiện tại cmd default Manual giữ handler cũ hoạt động.
-                    var result = await sender.Send(new SyncChannelCommand(item.ChannelId), ct);
+                    var result = await sender.Send(new SyncChannelCommand(item.ChannelId, run.TriggerType), ct);
                     CompleteItem(run, item, result.Error);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
