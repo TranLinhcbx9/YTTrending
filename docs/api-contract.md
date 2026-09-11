@@ -123,6 +123,7 @@ sách item qua endpoint paged riêng. Worker chỉ xử lý một run và các i
 
 | Verb | Route | Request | Response thành công |
 |---|---|---|---|
+| GET | `/api/jobs` | query `page`, `pageSize`, `status?`, `source?`, `timeRangeInDays?`, `from?`, `to?` | 200, `PagedResult<SyncRunDto>` |
 | POST | `/api/jobs/sync` | Không body; trigger luôn là `Manual` | **202**, `SyncRunDto` |
 | GET | `/api/jobs/sync/{id}` | route `id` | 200, `SyncRunDto` |
 | GET | `/api/jobs/sync/{id}/items` | route `id` + query `page`, `pageSize`, `status?` | 200, `PagedResult<SyncRunItemDto>` |
@@ -131,6 +132,19 @@ sách item qua endpoint paged riêng. Worker chỉ xử lý một run và các i
 `Pending` hoặc `Running`, và trả `409` với code `syncRun.noEnabledChannels` nếu không có channel
 đang bật. `GET` với `id <= 0` trả validation `400`; không tìm thấy run trả `404` với code
 `syncRun.notFound`. Các route item cũng trả cùng lỗi `syncRun.notFound` nếu run không tồn tại.
+
+### Query params — `GET /api/jobs`
+
+- `page`, `pageSize`: theo mục 5.
+- `status` (optional): `Pending` / `Running` / `Completed` / `CompletedWithIssues` / `Interrupted` /
+  `Failed`.
+- `source` (optional): `Manual` / `Scheduled`; đây là tên query filter cho field `triggerType` trên DTO.
+- `timeRangeInDays` (optional): số nguyên dương. Không dùng cùng `from` hoặc `to`.
+- `from`, `to` (optional): ISO 8601 `DateTimeOffset`; nếu gửi một mốc thì phải gửi cả hai, và không dùng
+  cùng `timeRangeInDays`. `to` phải lớn hơn hoặc bằng `from`.
+- Khi không có filter thời gian, server dùng `SyncRunHistory:DefaultLookbackDays` (hiện 7 ngày); range
+  được lọc theo `startedAt`, hoặc `createdAt` khi run chưa bắt đầu.
+- Kết quả sắp mới nhất trước theo `startedAt ?? createdAt`, rồi `id` giảm dần.
 
 ### Query params — `GET /api/jobs/sync/{id}/items`
 
@@ -313,4 +327,4 @@ Khi channel đang được một request khác sync, server trả `409` với co
 - Không có `VideoDetailDto` riêng biệt — trang detail phải tự đủ dùng với `VideoDto`.
 - `POST` tạo resource trả `200`, không phải `201` — đừng dựa vào status code để phân biệt create/read.
 - Video: FE chỉ có Query (list/detail), không có Command (add/update/delete). Video được tạo/cập nhật từ `POST /api/channels/{id}/sync`; SyncRun worker xử lý Sync all theo polling API ở trên. Metrics Update Job vẫn chưa expose API cho FE.
-- SyncRun chưa có endpoint list history, cancel, retry hay resume. `POST /api/jobs/sync` chỉ tạo run mới; nếu nhận `syncRun.inProgress`, response không mang id của run đang chạy để FE chuyển sang theo dõi.
+- SyncRun chưa có cancel, retry hay resume. `POST /api/jobs/sync` chỉ tạo run mới; nếu nhận `syncRun.inProgress`, response không mang id của run đang chạy để FE chuyển sang theo dõi.

@@ -1,10 +1,11 @@
 
 using YTTrending.Application.Common.Models.Filter;
-using YTTrending.Application.Common.Models.Pagination;
+using YTTrending.Application.Common.Models.Filters;
 
 namespace YTTrending.Application.Common.Interfaces.Persistence;
 public interface ISyncRunRepository : IRepository<SyncRun>
 {
+    Task<PagedResult<SyncRun>> GetPagedAsync(SyncRunFilter filter, CancellationToken ct);
     // Pending/Running đều active
     Task<bool> HasActiveAsync(CancellationToken ct);
     // Bản đọc no-tracking cho API summary, không dùng để cập nhật progress.

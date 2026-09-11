@@ -1,14 +1,25 @@
 using YTTrending.Application.Common.Extensions;
-using YTTrending.Application.Common.Interfaces;
 using YTTrending.Application.Common.Interfaces.Persistence;
 using YTTrending.Application.Common.Models.Filter;
+using YTTrending.Application.Common.Models.Filters;
 using YTTrending.Application.Common.Models.Pagination;
 
 namespace YTTrending.Infrastructure.Persistence.Repositories;
 
-public sealed class SyncRunRepository(YTTrendingDbContext db)
+public sealed class SyncRunRepository(YTTrendingDbContext db, TimeProvider timeProvider)
     : Repository<SyncRun>(db), ISyncRunRepository
 {
+    public Task<PagedResult<SyncRun>> GetPagedAsync(SyncRunFilter filter, CancellationToken ct) =>
+        Set.AsNoTracking()
+            .WhereIf(filter.Status.HasValue, s => s.Status == filter.Status!.Value)
+            .WhereIf(filter.Source.HasValue, s => s.TriggerType == filter.Source!.Value)
+            .WhereIf(filter.From.HasValue && filter.To.HasValue,
+                s => (s.StartedAt ?? s.CreatedAt) >= filter.From!.Value
+                    && (s.StartedAt ?? s.CreatedAt) <= filter.To!.Value)
+            .OrderByDescending(s => s.StartedAt ?? s.CreatedAt)
+            .ThenByDescending(s => s.Id)
+            .ToPagedResultAsync(filter.Page, filter.PageSize, ct);
+
     public Task<bool> HasActiveAsync(CancellationToken ct) =>
         Set.AnyAsync(x => x.Status == SyncRunStatus.Pending || x.Status == SyncRunStatus.Running, ct);
 

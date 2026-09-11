@@ -1,7 +1,7 @@
 using YTTrending.Application.Features.Jobs.Commands.CreateSyncRun;
 using YTTrending.Application.Features.Jobs.Queries.GetSyncRun;
 using YTTrending.Application.Features.Jobs.Queries.GetSyncRunItems;
-using YTTrending.Domain.Enums;
+using YTTrending.Application.Features.Jobs.Queries.GetSyncRuns;
 
 namespace YTTrending.API.Controllers;
 
@@ -9,6 +9,10 @@ namespace YTTrending.API.Controllers;
 [Route("api/jobs")]
 public sealed class JobsController(ISender sender) : ControllerBase
 {
+    [HttpGet]
+    public async Task<IActionResult> GetAll([FromQuery] GetSyncRunsQuery query, CancellationToken ct)
+    => (await sender.Send(query, ct)).ToActionResult();
+
     [HttpPost("sync")]
     public async Task<IActionResult> CreateSyncRun(CancellationToken ct)
     {

@@ -51,6 +51,11 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<SyncRunHistoryOptions>()
+            .Bind(configuration.GetSection(SyncRunHistoryOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         return services;
     }
 }
