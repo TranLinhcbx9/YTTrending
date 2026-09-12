@@ -66,7 +66,7 @@ Chi tiết công thức: [`domain/trending-engine.md`](domain/trending-engine.md
 }
 ```
 
-- **`Jobs:SyncEnabled` / `Jobs:MetricsUpdateEnabled`** — kill-switch riêng cho từng job (tách từ 1 cờ `Enabled` chung, xem [`decisions.md`](decisions.md) mục *Background job thật*). Ở `appsettings.Development.json` mặc định `false` cả hai — tránh đốt quota YouTube lúc F5 debug. Bật tay qua `POST /api/jobs/sync` / `POST /api/jobs/metrics-update` khi cần test.
+- **`Jobs:SyncEnabled` / `Jobs:MetricsUpdateEnabled`** — kill-switch riêng cho từng job (tách từ 1 cờ `Enabled` chung, xem [`decisions.md`](decisions.md) mục *Background job thật*). `SyncEnabled` chỉ chặn scheduler tự tạo scheduled SyncRun; không chặn hai luồng manual `POST /api/jobs/sync` và `POST /api/channels/{id}/sync`. Ở `appsettings.Development.json` mặc định `false` cả hai để tránh đốt quota YouTube lúc F5 debug. Metrics Update chưa có API/job implementation ở Phase 1 hiện tại.
 - **`SyncRunHistory:DefaultLookbackDays`** — số ngày mặc định của `GET /api/jobs` khi client không gửi filter thời gian. Giá trị phải từ `1` đến `365`; hiện là `7` ngày. Client có thể ghi đè cho từng request bằng `timeRangeInDays`, hoặc gửi đủ cặp `from`/`to`.
 - **`YouTube:UseFake`** — `true` dùng `FakeYouTubeClient` (không tốn quota, không cần key), `false` dùng client thật. **`YouTube:ApiKey`** — không để trong `appsettings.json` (giữ placeholder rỗng), set qua `dotnet user-secrets set "YouTube:ApiKey" "<key>"` chạy từ `src/YTTrending.API` (xem [`../ai/setup-base-notes.md`](../ai/setup-base-notes.md) mục A7).
 

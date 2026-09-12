@@ -14,7 +14,7 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 | 4. Infrastructure — Persistence | ✅ Xong |
 | 5. API — wiring | ✅ Xong |
 | 6. Slice nghiệm thu (`AddChannel`) | ✅ Xong |
-| 7. Background job thật (Sync + Metrics) | 🔄 Đang làm — Sync-all theo [`plans/sync-run-async.md`](plans/sync-run-async.md) |
+| 7. Background job thật (Sync + Metrics) | 🔄 Đang làm — Sync-all async ✅; Metrics Update chưa làm |
 
 ## Tiến độ feature (ngoài setup base)
 
@@ -26,8 +26,9 @@ Checklist gốc: [`setup-base.md`](setup-base.md) · cách làm từng mục: [`
 
 ## Đang làm
 
-- **Mục 7 resume 01/09/2026 — làm thẳng bản thật (Sync Channel Job + Metrics Update Job), không làm khung rỗng trước.** Lý do hoãn 24/08 (chưa có YouTube API key) hết hiệu lực — key thật đã có. Sync-all đã chuyển sang [`plans/sync-run-async.md`](plans/sync-run-async.md): code đã tới **Batch 5** (cooldown theo trigger). Static review xác nhận command mặc định `Manual`, handler chọn đúng cooldown và worker truyền `run.TriggerType`. Metrics Update không thuộc scope của plan SyncRun tạm này. Quyết định + số quota chi tiết ở [`../docs/decisions.md`](../docs/decisions.md) mục *Background job thật*.
-- **Nợ verify Batch 5**: chưa chạy `dotnet build`; chưa kiểm tra Swagger `POST /api/channels/{id}/sync` vẫn dùng cooldown Manual. Xong hai việc này mới chuyển sang Batch 6 (scheduler tạo scheduled run).
+- **Sync-all async — Batch 1–7 đã đóng (12/09/2026).** Migration `20260908170042_AddSyncRuns` đang applied trên `yttrending_dev`; contract/database/background-job SSOT đã đối chiếu với code. Worker xử lý progress durable, recovery không resume và scheduler chỉ tạo `CreateSyncRunCommand(Scheduled)`; manual không bị `Jobs:SyncEnabled` chặn. Nghiệm thu tay worker/API đã hoàn thành trước khi đóng batch; build xác minh độc lập pass với 2 warning có sẵn ở `SyncRunRepository` (CS9107, CS9113), 0 error. Metrics Update không thuộc scope plan này.
+- **Plan tạm SyncRun còn giữ lại**: [`plans/sync-run-async.md`](plans/sync-run-async.md) có thay đổi chưa commit từ trước, nên không xóa tự động để tránh mất nội dung. Xóa file này sau khi review/commit phần thay đổi đó.
+- **Việc kế tiếp của Mục 7:** triển khai Metrics Update Job độc lập (lấy stats video TRACKING, cùng một `now` cho cả lượt, tạo snapshot rồi tính Trending Score) theo [`../docs/domain/metrics-snapshot.md`](../docs/domain/metrics-snapshot.md), [`../docs/domain/trending-engine.md`](../docs/domain/trending-engine.md) và quyết định *Background job thật*.
 - **Việc backend độc lập sau SyncRun**: seed Video giả vào `DevDataSeeder` (gắn vào 4 channel đã seed, đủ 3 status NEW/TRACKING/ARCHIVED) — hiện `GET /api/videos` chạy đúng nhưng DB rỗng vì chưa seed. Chi tiết ở [`history.md`](history.md) mục *Nhật ký — Video feature (Query slice)*.
 - **Đã tạo [`docs/api-contract.md`](../docs/api-contract.md)** (25/08/2026) — hợp đồng JSON chi tiết cho FE (endpoint, DTO, error shape thật, pagination), đối chiếu trực tiếp code thay vì suy đoán từ `coding-convention.md` §11 (vốn có vài chỗ sai — đã sửa để trỏ về file mới).
 - Mục 6 đóng toàn bộ nợ verify (của chính nó lẫn 2 khoản treo từ mục 5) — 22/08/2026, chi tiết ở [`history.md`](history.md) mục *Nhật ký — mục 6*.

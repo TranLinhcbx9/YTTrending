@@ -32,6 +32,8 @@ public static class DependencyInjection
         services.AddSingleton<ISyncRunCreationLock, SyncRunCreationLock>();
 
         services.AddHostedService<SyncRunWorker>();
+        // Scheduler chỉ tạo run; worker ở trên mới là nơi xử lý item/channel.
+        services.AddHostedService<SyncChannelJob>();
 
         if (configuration.GetValue("YouTube:UseFake", true))
         {

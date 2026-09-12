@@ -64,6 +64,12 @@
 
 ⚠️ **Còn nợ**: `DevDataSeeder` mới seed Channel, **chưa seed Video** — `GET /api/videos` chạy đúng nhưng trả rỗng, `GET /api/videos/{id}` luôn 404. Cần làm trước khi FE dựng màn Video (List/Detail) có data thật để nhìn; không chặn nếu FE đợt này chỉ làm màn Channel.
 
+## Nhật ký — Sync-all async qua SyncRun
+
+- **Đóng Batch 1–7 (12/09/2026).** `SyncRun`/`SyncRunItem`, polling API, queue/worker có progress durable, recovery `Interrupted`, cooldown theo trigger và scheduler tạo scheduled run đã hoàn thành. Migration `20260908170042_AddSyncRuns` đã được áp dụng trên `yttrending_dev`.
+- **Nghiệm thu:** worker/API đã được kiểm tra tay trước closeout; `dotnet build` xác minh lại qua output riêng pass với 0 error. Có 2 warning không-null hiện hữu tại `SyncRunRepository` (CS9107, CS9113); không sửa trong Batch 7 vì batch này chỉ đóng tài liệu/trạng thái.
+- **SSOT đã đồng bộ:** thêm schema SyncRun vào [`../docs/database.md`](../docs/database.md), cập nhật scheduler/recovery ở [`../docs/domain/background-jobs.md`](../docs/domain/background-jobs.md), và làm rõ `Jobs:SyncEnabled` chỉ chặn scheduler trong [`../docs/config.md`](../docs/config.md). `api-contract.md` đã khớp controller/DTO/error mapping nên không cần đổi contract.
+
 ## Đã chốt (setup base)
 
 Toàn bộ quyết định setup base đã ghi vào [`../docs/decisions.md`](../docs/decisions.md) mục "Setup base": config từ `appsettings.json`, Postgres local, FE Angular repo riêng, swagger không auto-gen, status VARCHAR, snake_case, Serilog, test hoãn.

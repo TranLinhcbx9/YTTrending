@@ -94,7 +94,54 @@ Video được bookmark lại để tham khảo ý tưởng.
 
 ---
 
-## 6. app_config — ⚠️ CHƯA DÙNG Ở PHASE 1
+## 6. sync_runs
+
+Tiến độ bền vững của một lượt Sync all. Migration `AddSyncRuns` đã tạo bảng này; mỗi lượt chỉ
+snapshot các channel đang bật tại thời điểm tạo.
+
+| Field | Kiểu dữ liệu | Mô tả |
+|---|---|---|
+| id | INT (PK, identity) | ID nội bộ của lượt sync |
+| trigger_type | VARCHAR(16) | Nguồn tạo lượt: `Manual` / `Scheduled` |
+| status | VARCHAR(32) | `Pending` / `Running` / `Completed` / `CompletedWithIssues` / `Interrupted` / `Failed` |
+| total_count | INT | Số channel enabled tại lúc tạo run |
+| success_count | INT | Số item đã `Succeeded` |
+| skipped_count | INT | Số item đã `Skipped` |
+| failed_count | INT | Số item đã `Failed` |
+| error_code | VARCHAR(128), NULL | Lỗi làm hỏng cả run; lỗi từng channel nằm ở `sync_run_items` |
+| error_message | VARCHAR(1024), NULL | Thông điệp lỗi cấp run |
+| created_at | TIMESTAMPTZ | Thời điểm tạo run |
+| started_at | TIMESTAMPTZ, NULL | Thời điểm worker bắt đầu xử lý |
+| completed_at | TIMESTAMPTZ, NULL | Thời điểm run kết thúc |
+
+Có index trên `status`. Không có cột `processed_count`: API suy ra bằng
+`success_count + skipped_count + failed_count`.
+
+---
+
+## 7. sync_run_items
+
+Snapshot công việc và kết quả của từng channel trong một `sync_run`.
+
+| Field | Kiểu dữ liệu | Mô tả |
+|---|---|---|
+| id | INT (PK, identity) | ID nội bộ của item |
+| sync_run_id | INT (FK → sync_runs.id) | Run sở hữu item; xóa run sẽ cascade xóa item |
+| channel_id | INT | ID channel tại lúc tạo run; **không có FK** để lịch sử còn đọc được sau khi xóa channel |
+| channel_name | VARCHAR(255) | Tên channel snapshot tại lúc tạo run |
+| status | VARCHAR(16) | `Pending` / `Running` / `Succeeded` / `Skipped` / `Failed` |
+| error_code | VARCHAR(128), NULL | Mã lỗi của channel này |
+| error_message | VARCHAR(1024), NULL | Thông điệp lỗi của channel này |
+| started_at | TIMESTAMPTZ, NULL | Thời điểm worker bắt đầu item |
+| completed_at | TIMESTAMPTZ, NULL | Thời điểm item kết thúc |
+
+Index unique `(sync_run_id, channel_id)` ngăn một channel xuất hiện hai lần trong cùng run; index
+`(sync_run_id, status)` phục vụ truy vấn tiến độ. Đây là FK duy nhất của SyncRun: không có liên kết
+từ `channel_id` tới `channels`.
+
+---
+
+## 8. app_config — ⚠️ CHƯA DÙNG Ở PHASE 1
 
 > Phase 1 đọc config từ `appsettings.json` + Options pattern ([`config.md`](config.md)), **không tạo bảng này trong migration đầu tiên**. Giữ lại mô tả ở đây cho Phase 2, khi có UI sửa config lúc runtime.
 
@@ -121,3 +168,4 @@ Cấu hình hệ thống dạng key-value, không hardcode trong code.
 - **`latest_views/likes/comments` seed ngay lúc Discovery, không chờ Metrics Update Job** — lý do + cơ chế ghi đè đã ghi ở cột `latest_views` phía trên; xem thêm [`domain/discovery-engine.md`](domain/discovery-engine.md).
 - **`snapshot_at` và `calculated_at` KHÔNG phải audit field** — chúng là dữ liệu nghiệp vụ (thời điểm đo số liệu / thời điểm tính điểm), phải set tường minh ở chỗ tạo record, không để interceptor điền ngầm.
 - **`DateTimeOffset` cho mọi cột thời gian ở tầng code** (map sang `TIMESTAMPTZ`), không dùng `DateTime` — khớp với `TimeProvider.GetUtcNow()` và không phải đoán `DateTimeKind`.
+- **Thời gian của SyncRun là thời gian nghiệp vụ, không phải audit field**: `SyncRun`/`SyncRunItem` không kế thừa `AuditableEntity`; worker và command set tường minh bằng `TimeProvider` tại từng mốc tạo/chạy/kết thúc.
