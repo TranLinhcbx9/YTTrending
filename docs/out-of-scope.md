@@ -1,6 +1,6 @@
-# Phase 1 — Out of Scope
+# Giới hạn phạm vi — Phase 1
 
-Chưa làm ở Phase 1:
+Phase 1 chủ động không bao gồm:
 
 - Login.
 - Multi-user.

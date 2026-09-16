@@ -141,9 +141,9 @@ từ `channel_id` tới `channels`.
 
 ---
 
-## 8. app_config — ⚠️ CHƯA DÙNG Ở PHASE 1
+## 8. app_config — không thuộc schema hiện tại
 
-> Phase 1 đọc config từ `appsettings.json` + Options pattern ([`config.md`](config.md)), **không tạo bảng này trong migration đầu tiên**. Giữ lại mô tả ở đây cho Phase 2, khi có UI sửa config lúc runtime.
+> Hệ thống đọc config từ `appsettings.json` + Options pattern ([`config.md`](config.md)), nên **không tạo bảng này trong migration đầu tiên**. Mô tả được giữ làm thiết kế tham chiếu; chỉ tạo bảng khi đã chọn xây UI sửa config lúc runtime.
 
 Cấu hình hệ thống dạng key-value, không hardcode trong code.
 

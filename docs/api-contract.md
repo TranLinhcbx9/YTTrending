@@ -6,7 +6,7 @@
 
 - Dev: `http://localhost:5118` (chạy `dotnet run --project src/YTTrending.API`), Swagger tại `/swagger`.
 - **Không có auth** — Phase 1 single-user, không header nào bắt buộc.
-- **CORS chỉ bật ở Development** (`Program.cs`, `UseCors` nằm trong `if (app.Environment.IsDevelopment())`) — origin cho phép đọc từ config `Cors:AllowedOrigins`, hiện là `http://localhost:4200` (`appsettings.json`). **Production chưa cấu hình CORS** — gap Phase 1, cần biết trước khi deploy.
+- **CORS chỉ bật ở Development** (`Program.cs`, `UseCors` nằm trong `if (app.Environment.IsDevelopment())`) — origin cho phép đọc từ config `Cors:AllowedOrigins`, hiện là `http://localhost:4200` (`appsettings.json`). Production chưa có cấu hình CORS; đây là giới hạn cần xử lý trước khi deploy.
 
 ## 2. Quy ước JSON chung
 
@@ -320,7 +320,7 @@ Khi channel đang được một request khác sync, server trả `409` với co
 | `validation.failed` | FluentValidation fail (mọi command có validator) | 400 |
 | `server.error` | Exception chưa lường trước | 500 |
 
-## 10. Gaps Phase 1 — FE cần biết trước
+## 10. Giới hạn hiện tại — FE cần biết
 
 - Không auth, không phân quyền.
 - CORS chỉ hoạt động ở Development — chưa có cấu hình cho production.

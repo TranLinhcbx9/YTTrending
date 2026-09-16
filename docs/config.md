@@ -44,7 +44,7 @@ Chu kỳ Sync Channel Job (discovery — phát hiện video mới) và Metrics U
 }
 ```
 
-`MinViewsThreshold` **không** thuộc `TrendingOptions` — dùng chung `TrackingOptions.MinViewsThreshold` ở trên, không lặp lại field (chốt ở decisions.md mục *Batch 3*).
+`MinViewsThreshold` **không** thuộc `TrendingOptions` — dùng chung `TrackingOptions.MinViewsThreshold` ở trên, không lặp lại field (chốt ở [`decisions.md`](decisions.md) mục *Application — Trending configuration*).
 
 Chi tiết công thức: [`domain/trending-engine.md`](domain/trending-engine.md)
 
@@ -79,7 +79,7 @@ Chi tiết công thức: [`domain/trending-engine.md`](domain/trending-engine.md
 - Score Range
 - Views
 - Upload Date
-- Category *(future)*
+- Category *(không thuộc phạm vi hiện tại)*
 
 Chi tiết: [`domain/dashboard.md`](domain/dashboard.md)
 
@@ -105,4 +105,4 @@ Phase 1 đọc config từ **`appsettings.json` + Options pattern**, không dùn
 - Handler inject `IOptionsMonitor<T>` (không phải `IOptions<T>`) → sửa `appsettings.json` là ăn ngay, không cần restart.
 - Giá trị nhạy cảm (connection string, YouTube API key) để trong `dotnet user-secrets`, không commit.
 
-Bảng `app_config` trong [`database.md`](database.md) **chưa dùng ở Phase 1** — chỉ cần thiết khi có màn hình UI cho phép sửa config lúc runtime (Phase 2). Chi tiết: [`architecture.md`](architecture.md), [`decisions.md`](decisions.md).
+Bảng `app_config` trong [`database.md`](database.md) không thuộc schema hiện tại. Chỉ đưa vào khi đã chọn xây màn hình cho phép sửa config lúc runtime. Chi tiết: [`architecture.md`](architecture.md), [`decisions.md`](decisions.md).

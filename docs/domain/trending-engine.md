@@ -6,7 +6,7 @@ Xếp hạng video đáng chú ý dựa trên tốc độ tăng trưởng view (
 
 ## Config
 
-Trọng số công thức (`ViewGrowthWeight`, `VelocityWeight`) — giá trị + section JSON ở [`../config.md`](../config.md). Công thức thật chỉ dùng 2 trọng số này: `TrendingOptions` **không** mang `MinViewsThreshold` (xem [`../decisions.md`](../decisions.md) mục *Batch 3*).
+Trọng số công thức (`ViewGrowthWeight`, `VelocityWeight`) — giá trị + section JSON ở [`../config.md`](../config.md). Công thức thật chỉ dùng 2 trọng số này: `TrendingOptions` **không** mang `MinViewsThreshold` (xem [`../decisions.md`](../decisions.md) mục *Application — Trending configuration*).
 
 ## Công thức
 
@@ -33,7 +33,7 @@ TrendingScore = (ViewGrowthNorm * ViewGrowthWeight + VelocityNorm * VelocityWeig
 
 ## Lưu ý
 
-- Video mới có **1 snapshot** → chưa tính được Growth/Velocity → tạm thời chưa xếp hạng, chờ đủ 2 snapshot.
+- Video mới có **1 snapshot** → chưa đủ dữ liệu tính Growth/Velocity nên không được xếp hạng; chỉ tham gia sau snapshot thứ hai.
 - `min/max` để normalize nên tính lại mỗi lần Metrics Update Job chạy (không cache), vì tập video đang track thay đổi liên tục.
 - **Lưu trữ:** Trending Score lưu dạng **1 row/video** (ghi đè/UPSERT mỗi lần Metrics Update Job chạy) — không giữ lịch sử theo thời gian. Cần xem biến thiên theo thời gian thì tính lại từ [`metrics-snapshot.md`](metrics-snapshot.md).
 

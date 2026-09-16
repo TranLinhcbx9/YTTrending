@@ -10,7 +10,7 @@
 - Thumbnail
 - PublishedAt
 - Duration
-- Category *(nullable — chưa dùng ở Phase 1, chuẩn bị sẵn cho tương lai)*
+- Category *(nullable — chưa có use case trong phạm vi hiện tại)*
 
 **Metrics:**
 - Views

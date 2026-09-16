@@ -100,5 +100,5 @@ không tự chế shape lỗi riêng. Đổi shape DTO là **phải tự sửa**
 
 ## 12. Test & commit
 
-- Test (Phase 1 hoãn) — khi viết: EF Core **Sqlite in-memory** (không EF InMemory provider), mock `IYouTubeClient`, `FakeTimeProvider` để tua thời gian.
+- Test chưa thuộc phạm vi hiện tại. Khi mở hạng mục test: EF Core **Sqlite in-memory** (không EF InMemory provider), mock `IYouTubeClient`, `FakeTimeProvider` để tua thời gian.
 - Commit: Conventional Commits — `feat|fix|chore|docs(scope): mô tả` (theo lịch sử repo).

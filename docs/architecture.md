@@ -12,7 +12,7 @@ Nguyên tắc xuyên suốt: **Clean Architecture + CQRS ở mức tối thiểu
 
 | Thành phần | Lựa chọn | Ghi chú |
 |---|---|---|
-| Runtime | **.NET 8 (LTS)** | Hết support 10/11/2026 — Phase 2 tính chuyện lên .NET 10 |
+| Runtime | **.NET 8 (LTS)** | Hết support 10/11/2026 — trước khi chạm mốc này, việc nâng runtime phải được đánh giá như một quyết định riêng |
 | API | ASP.NET Core Web API + Controllers | Đã có sẵn `Program.cs` + Swagger |
 | CQRS | **MediatR 12.x** | Dùng dòng 12 (Apache-2.0, miễn phí). MediatR 13+ đã chuyển license thương mại — **không** nâng lên 13 |
 | Validation | FluentValidation 11.x | Chạy qua `ValidationBehavior` |
@@ -146,7 +146,7 @@ Check nghiệp vụ → gọi `IYouTubeClient`/Repository tương ứng → đ�
 
 ### Repository + UnitOfWork — pattern chuẩn của dự án
 
-Chốt lại ở mục 6 (21/08/2026), **đảo ngược quyết định "bỏ Repository" ban đầu — cho toàn dự án**, không riêng Channel. Bản trước của doc này (trước mục 6) từng bỏ hẳn `IChannelRepository`/`IVideoRepository`/`IMetricsSnapshotRepository`/`ISavedIdeaRepository`; giờ Repository (`IRepository<T>` base + repository riêng theo aggregate) + `IUnitOfWork` là cách chuẩn. `IChannelRepository`+`IUnitOfWork` (Channel) là implementation đầu tiên; aggregate khác có repository riêng khi tới lượt làm. Lý do đảo lại + đánh đổi đã biết (paging không tái dùng được `ToPagedResultAsync`) — xem [`decisions.md`](decisions.md) mục 6, không nhắc lại chi tiết ở đây.
+Chốt lại ở mục 6 (21/08/2026), **đảo ngược quyết định "bỏ Repository" ban đầu — cho toàn dự án**, không riêng Channel. Bản trước của doc này (trước mục 6) từng bỏ hẳn `IChannelRepository`/`IVideoRepository`/`IMetricsSnapshotRepository`/`ISavedIdeaRepository`; Repository (`IRepository<T>` base + repository riêng theo aggregate) + `IUnitOfWork` hiện là cách chuẩn. `IChannelRepository`+`IUnitOfWork` (Channel) là implementation đầu tiên; aggregate mới theo cùng mẫu khi có use case cần truy cập dữ liệu. Lý do đảo lại và lịch sử quyết định paging xem [`decisions.md`](decisions.md) mục 6.
 
 `IYTTrendingDbContext` **đã xoá** (21/08/2026) — hết consumer sau khi Repository thay thế hoàn toàn; repository implementation inject thẳng class cụ thể `YTTrendingDbContext`.
 
@@ -160,11 +160,11 @@ Ba kiểu: `Result` (command không trả gì — tránh `Result<bool>`), `Resul
 
 `Error` mang **`ErrorType`** (Validation/NotFound/Conflict) chứ không phải `string` đơn thuần — nhờ đó `ResultExtensions.ToActionResult` (API, mục 5) map sang HTTP status (200/404/409/400) ở **một chỗ duy nhất**.
 
-→ Code thật: [`../src/YTTrending.Application/Common/Models/Results/Result.cs`](../src/YTTrending.Application/Common/Models/Results/Result.cs) + [`Error.cs`](../src/YTTrending.Application/Common/Models/Results/Error.cs). Lý do 3 quyết định (Value throw · private ctor · bỏ implicit) + phương án bị loại: [`decisions.md`](decisions.md) mục *Application — mục 3, Batch 1*.
+→ Code thật: [`../src/YTTrending.Application/Common/Models/Results/Result.cs`](../src/YTTrending.Application/Common/Models/Results/Result.cs) + [`Error.cs`](../src/YTTrending.Application/Common/Models/Results/Error.cs). Lý do 3 quyết định (Value throw · private ctor · bỏ implicit) + phương án bị loại: [`decisions.md`](decisions.md) mục *Application — Result pattern*.
 
 ## Pipeline Behaviors — chỉ 2 cái
 
-`LoggingBehavior` (log tên request + thời gian) và `ValidationBehavior` (FluentValidation, fail → `Result.Failure`). Đăng ký trong `AddApplication()`, **`AddOpenBehavior(Logging)` trước `Validation`** (Logging bọc ngoài mới log được nhánh validation fail). → Code: [`../src/YTTrending.Application/Common/Behaviors/`](../src/YTTrending.Application/Common/Behaviors/) + [`DependencyInjection.cs`](../src/YTTrending.Application/DependencyInjection.cs); chi tiết [`decisions.md`](decisions.md) mục *Batch 5/6*.
+`LoggingBehavior` (log tên request + thời gian) và `ValidationBehavior` (FluentValidation, fail → `Result.Failure`). Đăng ký trong `AddApplication()`, **`AddOpenBehavior(Logging)` trước `Validation`** (Logging bọc ngoài mới log được nhánh validation fail). → Code: [`../src/YTTrending.Application/Common/Behaviors/`](../src/YTTrending.Application/Common/Behaviors/) + [`DependencyInjection.cs`](../src/YTTrending.Application/DependencyInjection.cs); chi tiết [`decisions.md`](decisions.md) mục *Application — pipeline behaviors* và *Application — wiring Options và behaviors*.
 
 **Không có `TransactionBehavior`.** Một `SaveChangesAsync()` đã là một transaction. Chỉ thêm behavior này khi xuất hiện handler gọi `SaveChanges` từ 2 lần trở lên — Phase 1 không có ca nào.
 
@@ -193,7 +193,7 @@ Hai điều quan trọng:
 
 Phase 1 đọc config từ **`appsettings.json` + Options pattern**, validate lúc khởi động (`AddOptions<T>().Bind(...).ValidateDataAnnotations().ValidateOnStart()` — sai config → chết lúc start, không chết lúc job chạy 3h sáng). Handler inject `IOptionsMonitor<T>` (không phải `IOptions<T>`) để sửa `appsettings.json` là ăn ngay, khỏi restart. → Nguồn config: [`config.md`](config.md); Options class: [`../src/YTTrending.Application/Common/Options/`](../src/YTTrending.Application/Common/Options/).
 
-> ✅ Đã chốt (pending #3 đóng): dùng `appsettings.json`, bảng `app_config` **không tạo** ở Phase 1. [`config.md`](config.md) và [`database.md`](database.md) đã sửa cho khớp.
+> ✅ Đã chốt: dùng `appsettings.json`; bảng `app_config` không thuộc schema hiện tại. [`config.md`](config.md) và [`database.md`](database.md) là nguồn mô tả tương ứng.
 
 ## Thời gian: dùng `TimeProvider`, không dùng `DateTime.UtcNow`
 
@@ -211,7 +211,7 @@ Một test project duy nhất: `tests/YTTrending.Application.Tests/`.
 
 ## External Dependency
 
-**YouTube Data API v3** — cần API key, có quota giới hạn (xem [`decisions.md`](decisions.md) pending #2). Gọi qua typed `HttpClient` + `.AddStandardResilienceHandler()` (retry + circuit breaker + timeout, 1 dòng).
+**YouTube Data API v3** — cần API key, có quota giới hạn (quy mô và phép tính quota ở [`decisions.md`](decisions.md)). Gọi qua typed `HttpClient` + `.AddStandardResilienceHandler()` (retry + circuit breaker + timeout, 1 dòng).
 
 Lưu ý khi quota là mối lo: quota **không** hồi lại khi retry, nên chỉ retry lỗi tạm thời (5xx, timeout) — tuyệt đối không retry lỗi 403 quota exceeded.
 
@@ -225,7 +225,7 @@ Còn lại là quyết định phạm-vi-Phase-1, giữ ngắn ở đây:
 |---|---|---|
 | Strongly-typed ID (`VideoId` value object) | Bỏ (Phase 1) | Kéo theo `HasConversion` mọi chỗ; đã có unique index bảo vệ |
 | Domain Events | Bỏ (Phase 1) | Chưa có side-effect nào cần tách khỏi luồng chính |
-| .NET Aspire | Hoãn | Cân nhắc lại khi cần telemetry/dashboard sau Phase 1 |
+| .NET Aspire | Không đưa vào phạm vi hiện tại | Chưa có nhu cầu telemetry/dashboard; chỉ đánh giá lại khi nhu cầu này được xác nhận |
 | Tách 2 test project | Bỏ | Gộp còn 1, tách khi thật sự có thứ để test ở Infrastructure |
 
 ## Liên quan

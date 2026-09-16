@@ -30,7 +30,7 @@ Persist NEW Candidate
 **Nguyên tắc:**
 - Không crawl toàn bộ lịch sử channel: đọc từng trang uploads mới đến cũ và dừng khi đủ quota hoặc đã qua `RecentDays`.
 - Chỉ lấy video còn trong phạm vi tracking, **và đã đạt `MinViewsThreshold`**.
-- Video chưa đạt ngưỡng: **không lưu bất kỳ record nào** vào hệ thống. Nếu sau này video đó tăng view và vẫn còn trong `RecentDays`, nó sẽ được bắt lại từ đầu (không có snapshot lịch sử trước thời điểm đạt ngưỡng).
+- Video chưa đạt ngưỡng: **không lưu bất kỳ record nào** vào hệ thống. Nếu video tăng view và vẫn còn trong `RecentDays` ở một lượt Discovery tiếp theo, hệ thống sẽ bắt lại từ đầu (không có snapshot lịch sử trước thời điểm đạt ngưỡng).
 
 ## Duplicate Check (so sánh khi Discovery)
 
