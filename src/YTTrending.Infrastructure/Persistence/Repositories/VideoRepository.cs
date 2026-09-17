@@ -1,0 +1,27 @@
+using YTTrending.Application.Common.Extensions;
+using YTTrending.Application.Common.Interfaces.Persistence;
+using YTTrending.Application.Common.Models.Filters;
+using YTTrending.Application.Common.Models.Pagination;
+using YTTrending.Domain.Enums;
+using YTTrending.Infrastructure.Persistence;
+
+namespace YTTrending.Infrastructure.Persistence.Repositories;
+
+public sealed class VideoRepository(YTTrendingDbContext db)
+    : Repository<Video>(db), IVideoRepository
+{
+    public Task<PagedResult<Video>> GetPagedAsync(VideoFilter filter, CancellationToken ct)
+        => Set.AsNoTracking()
+            .Include(v => v.Channel)
+            .WhereIf(filter.ChannelIds is { Length: > 0 }, v => filter.ChannelIds!.Contains(v.ChannelId))
+            .WhereIf(filter.Status.HasValue, v => v.Status == filter.Status!.Value)
+            .WhereIf(filter.MinViews.HasValue, v => v.LatestViews >= filter.MinViews!.Value)
+            .WhereIf(filter.TimeRanges.HasValue, v => v.PublishedAt >= DateTime.UtcNow.AddDays(-filter.TimeRanges!.Value))
+            .OrderByDescending(v => v.PublishedAt).ThenBy(v => v.Id)
+            .ToPagedResultAsync(filter.Page, filter.PageSize, ct);
+
+    public Task<Video?> GetByIdWithChannelAsync(int id, CancellationToken ct) =>
+        Set.Include(v => v.Channel).FirstOrDefaultAsync(v => v.Id == id, ct);
+    public Task<List<Video>> GetActiveByChannelIdAsync(int channelId, CancellationToken ct) =>
+    Set.Where(v => v.ChannelId == channelId && v.Status != VideoStatus.Archived).ToListAsync(ct);
+}

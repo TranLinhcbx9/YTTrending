@@ -7,45 +7,68 @@ Toàn bộ thông số hệ thống không hardcode, có thể cấu hình.
 ```json
 {
   "SyncIntervalHours": 6,
+  "ManualSyncCooldownHours": 0.001,
+  "MetricsUpdateIntervalHours": 6,
   "RecentDays": 7,
-  "RecentShortsLimit": 20,
+  "MaxQualifiedVideosPerChannel": 20,
   "MaxTrackingVideosPerChannel": 100,
   "MinViewsThreshold": 100000,
+  "ShortsMaxDurationSeconds": 180,
   "ArchivedRetentionDays": 30
 }
 ```
 
 ### Sync
 
-Chu kỳ đồng bộ dữ liệu (chọn 1 trong các mốc):
+Chu kỳ Sync Channel Job (discovery — phát hiện video mới) và Metrics Update Job (cập nhật view/snapshot/trending cho video đang TRACKING) — chọn riêng 1 trong các mốc cho mỗi job:
 - 1h / 3h / 6h / 12h / 24h
 
-> **Lưu ý:** Snapshot metrics được tạo **mỗi lần Sync Job chạy** — nghĩa là `SyncIntervalHours` cũng chính là snapshot frequency. Đây không phải 2 config riêng biệt (hiện tại). Không ảnh hưởng schema — nếu sau này tách riêng thì chỉ cần thêm 1 job riêng, bảng snapshot không đổi.
->
-> ⚠️ Xem [`decisions.md`](decisions.md) — pending: có nên tách riêng snapshot frequency khỏi sync interval hay không.
+`SyncIntervalHours` và `MetricsUpdateIntervalHours` là **2 config độc lập** (tách theo [`decisions.md`](decisions.md) mục *Background job thật*, 01/09/2026) — trước đó gộp chung, snapshot ăn theo chu kỳ sync.
+
+`ManualSyncCooldownHours` là khoảng cách tối thiểu giữa hai lần bấm sync thủ công cho cùng một channel (kể cả channel sync riêng hay thuộc manual SyncRun). Scheduled SyncRun dùng `SyncIntervalHours`, không dùng cooldown manual.
 
 ### Video Tracking Rule
 
-Điều kiện lấy video (Discovery):
-- Video đăng trong `RecentDays` ngày gần nhất.
-- **OR** nằm trong `RecentShortsLimit` Shorts mới nhất của channel.
-- **VÀ phải đạt `MinViewsThreshold`** (chi tiết: [`domain/discovery-engine.md`](domain/discovery-engine.md)).
+`RecentDays`, `MaxQualifiedVideosPerChannel`, `MinViewsThreshold` là 3 thông số Discovery dùng để quyết định video nào được lưu thành candidate NEW — rule đầy đủ ở [`domain/discovery-engine.md`](domain/discovery-engine.md). NEW được promote sang TRACKING ở lượt sync thành công kế tiếp nếu còn slot `MaxTrackingVideosPerChannel`; xem [`domain/video-lifecycle.md`](domain/video-lifecycle.md). `ShortsMaxDurationSeconds` là điều kiện riêng, lọc **trước** 3 rule trên: video dài hơn ngưỡng này không phải Shorts, bị loại ngay ở `YouTubeClient` (không phải rule nghiệp vụ tracking).
 
 ### Archived Retention
 
-Video ở trạng thái ARCHIVED quá `ArchivedRetentionDays` (mặc định 30 ngày) sẽ bị **soft-delete** bởi Cleanup Job — không xóa snapshot lịch sử liên quan. Chi tiết: [`domain/video-lifecycle.md`](domain/video-lifecycle.md), [`domain/background-jobs.md`](domain/background-jobs.md).
+`ArchivedRetentionDays` (mặc định 30 ngày) — video ARCHIVED quá hạn bị Cleanup Job soft-delete (snapshot vẫn giữ). Rule ở [`domain/video-lifecycle.md`](domain/video-lifecycle.md), [`domain/background-jobs.md`](domain/background-jobs.md).
 
 ## Trending Engine Config
 
 ```json
 {
   "ViewGrowthWeight": 60,
-  "VelocityWeight": 40,
-  "MinViewsThreshold": 100000
+  "VelocityWeight": 40
 }
 ```
 
+`MinViewsThreshold` **không** thuộc `TrendingOptions` — dùng chung `TrackingOptions.MinViewsThreshold` ở trên, không lặp lại field (chốt ở [`decisions.md`](decisions.md) mục *Application — Trending configuration*).
+
 Chi tiết công thức: [`domain/trending-engine.md`](domain/trending-engine.md)
+
+## Jobs, SyncRun History & YouTube Client Config
+
+```json
+{
+  "Jobs": {
+    "SyncEnabled": true,
+    "MetricsUpdateEnabled": true
+  },
+  "SyncRunHistory": {
+    "DefaultLookbackDays": 7
+  },
+  "YouTube": {
+    "ApiKey": "",
+    "UseFake": true
+  }
+}
+```
+
+- **`Jobs:SyncEnabled` / `Jobs:MetricsUpdateEnabled`** — kill-switch riêng cho từng job (tách từ 1 cờ `Enabled` chung, xem [`decisions.md`](decisions.md) mục *Background job thật*). `SyncEnabled` chỉ chặn scheduler tự tạo scheduled SyncRun; không chặn hai luồng manual `POST /api/jobs/sync` và `POST /api/channels/{id}/sync`. Ở `appsettings.Development.json` mặc định `false` cả hai để tránh đốt quota YouTube lúc F5 debug. Metrics Update chưa có API/job implementation ở Phase 1 hiện tại.
+- **`SyncRunHistory:DefaultLookbackDays`** — số ngày mặc định của `GET /api/jobs` khi client không gửi filter thời gian. Giá trị phải từ `1` đến `365`; hiện là `7` ngày. Client có thể ghi đè cho từng request bằng `timeRangeInDays`, hoặc gửi đủ cặp `from`/`to`.
+- **`YouTube:UseFake`** — `true` dùng `FakeYouTubeClient` (không tốn quota, không cần key), `false` dùng client thật. **`YouTube:ApiKey`** — không để trong `appsettings.json` (giữ placeholder rỗng), set qua `dotnet user-secrets set "YouTube:ApiKey" "<key>"` chạy từ `src/YTTrending.API` (xem [`../ai/setup-base-notes.md`](../ai/setup-base-notes.md) mục A7).
 
 ## Dashboard Filters Config
 
@@ -56,7 +79,7 @@ Chi tiết công thức: [`domain/trending-engine.md`](domain/trending-engine.md
 - Score Range
 - Views
 - Upload Date
-- Category *(future)*
+- Category *(không thuộc phạm vi hiện tại)*
 
 Chi tiết: [`domain/dashboard.md`](domain/dashboard.md)
 
@@ -64,11 +87,14 @@ Chi tiết: [`domain/dashboard.md`](domain/dashboard.md)
 
 Toàn bộ các thông số quan trọng đều đưa vào configuration, **không hardcode trong code**, để sau khi dùng thực tế có thể tinh chỉnh mà không phải sửa logic hệ thống:
 
-- Sync interval (= snapshot frequency).
-- Tracking window (RecentDays / RecentShortsLimit).
+- Sync interval và Metrics Update interval (tách riêng).
+- Tracking window và quota discovery (RecentDays / MaxQualifiedVideosPerChannel).
 - Min views threshold để bắt đầu tracking.
+- Shorts max duration (lọc video dài thành Shorts).
 - Trending score weights (ViewGrowthWeight, VelocityWeight).
 - Archived retention (ArchivedRetentionDays).
+- Job enable flags + YouTube client thật/giả (Jobs, YouTube).
+- Default lookback của lịch sử SyncRun.
 - Dashboard filters.
 
 ### Nguồn config: `appsettings.json` (đã chốt)
@@ -79,4 +105,4 @@ Phase 1 đọc config từ **`appsettings.json` + Options pattern**, không dùn
 - Handler inject `IOptionsMonitor<T>` (không phải `IOptions<T>`) → sửa `appsettings.json` là ăn ngay, không cần restart.
 - Giá trị nhạy cảm (connection string, YouTube API key) để trong `dotnet user-secrets`, không commit.
 
-Bảng `app_config` trong [`database.md`](database.md) **chưa dùng ở Phase 1** — chỉ cần thiết khi có màn hình UI cho phép sửa config lúc runtime (Phase 2). Chi tiết: [`architecture.md`](architecture.md), [`decisions.md`](decisions.md).
+Bảng `app_config` trong [`database.md`](database.md) không thuộc schema hiện tại. Chỉ đưa vào khi đã chọn xây màn hình cho phép sửa config lúc runtime. Chi tiết: [`architecture.md`](architecture.md), [`decisions.md`](decisions.md).

@@ -1,7 +1,15 @@
 global using Microsoft.EntityFrameworkCore;
+global using Microsoft.EntityFrameworkCore.Metadata.Builders;
 global using Microsoft.Extensions.Configuration;
 global using Microsoft.Extensions.DependencyInjection;
 
-// Thêm khi bước 2/4 tạo ra chúng:
-// global using YTTrending.Domain.Entities;
-// global using YTTrending.Application.Common.Interfaces;
+global using YTTrending.Domain.Common;
+global using YTTrending.Domain.Entities;
+
+global using YTTrending.Application.Common.Interfaces;
+
+global using Microsoft.Extensions.Logging;
+global using Microsoft.Extensions.Options;
+global using YTTrending.Application.Common.Options;
+//global using YTTrending.Infrastructure.Common;
+

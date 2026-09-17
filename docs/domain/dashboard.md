@@ -18,7 +18,7 @@ Không hardcode. Config:
 - Score Range
 - Views
 - Upload Date
-- Category *(future)*
+- Category *(không thuộc phạm vi hiện tại)*
 
 ## Liên quan
 

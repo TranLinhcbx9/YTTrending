@@ -14,7 +14,7 @@ Version NuGet khai một chỗ, csproj chỉ ghi tên package. Với dự án n�
 
 ### A2. `Directory.Build.props` — bật `TreatWarningsAsErrors` cho nullable
 
-`Nullable` đã bật nhưng warning vẫn chỉ là warning. Domain dùng private setter + static factory, EF thì cần constructor rỗng — chỗ này rất dễ đẻ ra `null!` rải rác. Bật warning-as-error ngay từ khi repo còn trống thì rẻ; bật sau khi có 50 file thì không ai bật nữa.
+`Nullable` đã bật nhưng warning vẫn chỉ là warning. Navigation property phải khai `= null!` (EF chỉ gán khi `Include`) — chỗ này rất dễ đẻ ra `null!` rải rác. Bật warning-as-error ngay từ khi repo còn trống thì rẻ; bật sau khi có 50 file thì không ai bật nữa.
 
 ### A3. Naming convention snake_case ⚠️
 
@@ -38,63 +38,24 @@ Phải quyết **trước khi tạo migration đầu tiên** — đổi sau ngh�
 |---|---|---|
 | `channels` | `created_at`, `updated_at` | **Audit** — metadata kỹ thuật |
 | `videos` | `created_at`, `updated_at` | **Audit** — metadata kỹ thuật |
-| `videos` | `archived_at` | **Dữ liệu nghiệp vụ** — do `Video.Archive()` set, là đồng hồ đếm retention |
-| `saved_ideas` | `created_at` | Audit, nhưng chỉ 1 nửa |
+| `videos` | `archived_at` | **Dữ liệu nghiệp vụ** — do `VideoStateRules.Archive()` set, là đồng hồ đếm retention |
+| `saved_ideas` | `created_at`, `updated_at` | **Audit** — `note` sửa được (`UpdateNote`) nên `updated_at` mang thông tin thật |
 | `video_metric_snapshots` | `snapshot_at` | **Dữ liệu nghiệp vụ** — là *nội dung* của record |
 | `trending_scores` | `calculated_at` | **Dữ liệu nghiệp vụ** |
 
-Ranh giới cần nhớ: **audit thì tự động, thời gian nghiệp vụ thì set tường minh.** `snapshot_at` trả lời câu hỏi "số liệu này đo lúc nào" — nó là dữ liệu, phải nhìn thấy trong code chỗ tạo snapshot, không được để một interceptor ngầm điền hộ.
+Ranh giới cần nhớ: **audit thì tự động, thời gian nghiệp vụ thì set tường minh.** `snapshot_at` trả lời câu hỏi "số liệu này đo lúc nào" — nó là dữ liệu, có thể lệch thời điểm insert row, nên phải nhìn thấy trong code chỗ tạo snapshot, không được để một interceptor ngầm điền hộ.
 
-Nên chỉ `Channel` và `Video` kế thừa `AuditableEntity`. `SavedIdea` chỉ cần `CreatedAt` → dùng interface `IHasCreatedAt`, hoặc set thẳng trong factory `SavedIdea.Create(...)` (một chỗ duy nhất tạo ra nó, không sợ quên).
+Ngược lại `saved_ideas.created_at` đúng nghĩa là "row này sinh lúc nào" (bookmark = insert, không lệch được), nên để audit điền là chuẩn.
 
-#### (2) Base class + override trong `AppDbContext` (đã chốt: cách A)
+✅ **Đã chốt: `Channel`, `Video`, `SavedIdea` kế thừa `AuditableEntity`.** Không tạo interface `IHasCreatedAt` — thêm một vòng lặp nữa trong `ApplyAuditFields()` để phục vụ đúng 1 entity thì không chặn được lỗi gì, mà `saved_ideas` có `updated_at` là hợp lý sẵn (note sửa được). Hai entity còn lại — `VideoMetricSnapshot`, `TrendingScore` — **không** kế thừa: chúng chỉ mang thời gian nghiệp vụ.
 
-```csharp
-// Domain/Common/AuditableEntity.cs
-public abstract class AuditableEntity
-{
-    public DateTimeOffset CreatedAt { get; private set; }
-    public DateTimeOffset UpdatedAt { get; private set; }
-}
-```
+#### (2) Base class + override trong `YTTrendingDbContext` (đã chốt: cách A)
+
+Code: [`../src/YTTrending.Domain/Common/AuditableEntity.cs`](../src/YTTrending.Domain/Common/AuditableEntity.cs) — `CreatedAt`/`UpdatedAt` với `private set`.
 
 `private set` để giữ đúng nguyên tắc Domain (không cho object initializer set bừa). Vẫn ghi được, nhưng phải ghi **qua `ChangeTracker` chứ không qua property**:
 
-```csharp
-// Infrastructure/Persistence/AppDbContext.cs
-public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider clock)
-    : DbContext(options), IAppDbContext
-{
-    // ... DbSet<T> ...
-
-    public override Task<int> SaveChangesAsync(CancellationToken ct = default)
-    {
-        ApplyAuditFields();
-        return base.SaveChangesAsync(ct);
-    }
-
-    // BẮT BUỘC override cả bản sync — chỗ nào lỡ gọi SaveChanges() thì audit vẫn chạy
-    public override int SaveChanges()
-    {
-        ApplyAuditFields();
-        return base.SaveChanges();
-    }
-
-    private void ApplyAuditFields()
-    {
-        var now = clock.GetUtcNow();
-
-        foreach (var entry in ChangeTracker.Entries<AuditableEntity>())
-        {
-            if (entry.State == EntityState.Added)
-                entry.Property(nameof(AuditableEntity.CreatedAt)).CurrentValue = now;
-
-            if (entry.State is EntityState.Added or EntityState.Modified)
-                entry.Property(nameof(AuditableEntity.UpdatedAt)).CurrentValue = now;
-        }
-    }
-}
-```
+Code: [`../src/YTTrending.Infrastructure/Persistence/YTTrendingDbContext.cs`](../src/YTTrending.Infrastructure/Persistence/YTTrendingDbContext.cs) — override **cả** `SaveChanges` lẫn `SaveChangesAsync`, gọi `ApplyAuditFields()` duyệt `ChangeTracker.Entries<AuditableEntity>()`, lấy giờ từ `TimeProvider` (`Added` → set `CreatedAt`; `Added`/`Modified` → set `UpdatedAt`).
 
 `entry.Property(...).CurrentValue = now` ghi qua backing field của EF nên **không cần public setter** — đây là cách hoà giải giữa "Domain kín" và "audit tự động".
 
@@ -102,26 +63,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider c
 
 Không cần gì thêm ngoài việc `TimeProvider` đã có trong DI — EF tự resolve tham số thứ hai của constructor:
 
-```csharp
-services.AddSingleton(TimeProvider.System);
-services.AddDbContext<AppDbContext>(o => o
-    .UseNpgsql(connectionString)
-    .UseSnakeCaseNamingConvention());
-```
+Đăng ký ở [`AddInfrastructure`](../src/YTTrending.Infrastructure/DependencyInjection.cs): `AddSingleton(TimeProvider.System)` + `AddDbContext(... UseSnakeCaseNamingConvention())` — EF tự resolve tham số `TimeProvider` của constructor.
 
-`dotnet ef migrations add` cũng chạy bình thường: nó lấy `AppDbContext` qua service provider của `Program.cs`, mà `TimeProvider` đã đăng ký ở đó.
+`dotnet ef migrations add` cũng chạy bình thường: nó lấy `YTTrendingDbContext` qua service provider của `Program.cs`, mà `TimeProvider` đã đăng ký ở đó.
 
 #### (4) Vì sao override, không dùng `SaveChangesInterceptor`
 
 EF Core có API interception (đăng ký một object vào `DbContextOptions`, EF gọi tại các mốc `SavingChanges` / `SavedChanges` / `SaveChangesFailed`). Nó **không phải** thứ thay thế `ChangeTracker` — interceptor vẫn phải đọc `ChangeTracker` y hệt đoạn trên. Khác biệt duy nhất là đoạn code đó nằm ở file nào.
 
-Chọn override vì đúng nguyên tắc của dự án ([`../docs/architecture.md`](../docs/architecture.md#L7)): *lớp trừu tượng nào không trả lời được "nó chặn được lỗi gì" thì bỏ*. Với **một** DbContext và **một** mối quan tâm lúc save, interceptor không chặn thêm lỗi nào — chỉ thêm 1 file và 2 dòng đăng ký, lại khó tìm hơn (mở `AppDbContext` không thấy audit đâu). Cùng logic đã dùng để bỏ Repository.
+Chọn override vì đúng nguyên tắc của dự án ([`../docs/architecture.md`](../docs/architecture.md)): *lớp trừu tượng nào không trả lời được "nó chặn được lỗi gì" thì bỏ*. Với **một** DbContext và **một** mối quan tâm lúc save, interceptor không chặn thêm lỗi nào — chỉ thêm 1 file và 2 dòng đăng ký, lại khó tìm hơn (mở `YTTrendingDbContext` không thấy audit đâu). Cùng logic đã dùng để bỏ Repository.
 
 **Khi nào cắt sang interceptor:** khi xuất hiện mối quan tâm **thứ hai** lúc save — soft-delete tự động, domain events, outbox. Lúc đó mỗi thứ một class thay vì một method phình dần. Chuyển tốn ~10 phút vì thân hàm bê nguyên; interceptor còn có sẵn hook `SavedChanges`/`SaveChangesFailed` mà override phải tự try-catch.
 
 #### (5) ⚠️ Ba cạm bẫy
 
-**a) `ExecuteUpdateAsync` / `ExecuteDeleteAsync` không đi qua `SaveChanges`.** Nó dịch thẳng ra một câu SQL, không nạp entity, không có gì trong ChangeTracker để duyệt — nên `ApplyAuditFields()` không bao giờ chạy (interceptor cũng vậy, không phải nhược điểm của cách A). Cleanup Job soft-delete hàng loạt bằng đúng cái này ([`../docs/architecture.md`](../docs/architecture.md#L242)) → phải tự set `updated_at`:
+**a) `ExecuteUpdateAsync` / `ExecuteDeleteAsync` không đi qua `SaveChanges`.** Nó dịch thẳng ra một câu SQL, không nạp entity, không có gì trong ChangeTracker để duyệt — nên `ApplyAuditFields()` không bao giờ chạy (interceptor cũng vậy, không phải nhược điểm của cách A). Cleanup Job soft-delete hàng loạt bằng đúng cái này ([`../docs/architecture.md`](../docs/architecture.md)) → phải tự set `updated_at`:
 
 ```csharp
 await db.Videos
@@ -147,7 +103,7 @@ Dùng `DateTimeOffset`, không `DateTime`. Lý do: `TimeProvider.GetUtcNow()` tr
 
 YouTube Data API có quota và **quota không hồi lại khi retry**. Nếu job tự chạy mỗi lần bấm F5 thì đốt quota vào việc debug.
 
-Giải: `"Jobs": { "Enabled": false }` trong `appsettings.Development.json`, `BackgroundService` đọc cờ này và `return` ngay nếu tắt. Kèm theo đó là endpoint `POST /api/jobs/sync` để chạy tay đúng lúc mình muốn — cũng chính là cách test job mà không chờ timer (đã ngụ ý ở [`../docs/architecture.md`](../docs/architecture.md#L270)).
+Giải: `"Jobs": { "Enabled": false }` trong `appsettings.Development.json`, `BackgroundService` đọc cờ này và `return` ngay nếu tắt. Kèm theo đó là endpoint `POST /api/jobs/sync` để chạy tay đúng lúc mình muốn — cũng chính là cách test job mà không chờ timer (đã ngụ ý ở [`../docs/architecture.md`](../docs/architecture.md)).
 
 ### A6. `FakeYouTubeClient` cho dev
 
@@ -156,6 +112,8 @@ Giải: `"Jobs": { "Enabled": false }` trong `appsettings.Development.json`, `Ba
 ### A7. Secrets không nằm trong repo
 
 API key YouTube + connection string → `dotnet user-secrets` (đã có sẵn cơ chế, không cần package). `appsettings.json` chỉ giữ placeholder rỗng. Repo là public hay không cũng không nên commit key.
+
+> **Ngoại lệ có chủ ý (mục 4): connection string Development để thẳng trong `appsettings.Development.json`.** DB là Postgres local, password chỉ dùng trên đúng một máy, không mở ra ngoài — mất nó không mất gì. Đánh đổi lấy việc `dotnet ef` / PMC / F5 đều đọc được cùng một chỗ, không phải nhớ `dotnet user-secrets set` mỗi lần clone. `appsettings.json` (bản không-Development) **vẫn** giữ placeholder rỗng. Ngoại lệ này **không áp cho YouTube API key** — key đó có quota và gắn với Google account, vẫn phải đi qua user-secrets ở mục 5.
 
 ### A8. Postgres cài sẵn trên máy — tạo DB riêng cho dự án
 
@@ -177,7 +135,7 @@ Job chạy lúc 3h sáng, console log biến mất khi tắt máy. Cần log l�
 
 Cột `status` lưu **varchar + `HasConversion<string>()`**, không dùng native Postgres ENUM. Lý do chính (vẫn đúng dù chưa viết test): thêm một giá trị enum vào native ENUM ở Postgres phải viết migration `ALTER TYPE` thủ công — EF không tự sinh. Lý do phụ: khi nào làm test bằng Sqlite in-memory, mapping đặc thù Npgsql (native enum, `jsonb`, `tsvector`) sẽ làm bước tạo schema vỡ; tránh sẵn thì sau này không phải sửa lại configuration.
 
-Chỗ này [`../docs/database.md`](../docs/database.md) đang ghi `ENUM(...)` còn [`../docs/architecture.md`](../docs/architecture.md#L234) ghi `HasConversion<string>()`. **Đã chốt: varchar + `HasConversion<string>()`** — sửa lại `database.md` cho khớp.
+**Đã chốt: varchar + `HasConversion<string>()`** (không native ENUM) — [`../docs/database.md`](../docs/database.md) và [`../docs/architecture.md`](../docs/architecture.md) đã ghi khớp.
 
 ### A12. CORS cho Angular dev server
 
@@ -197,67 +155,39 @@ Nếu chốt config đọc từ `appsettings.json` (pending #3, đề xuất đ�
 
 Những thứ **mọi feature đều đụng tới**. Làm ở base thì viết một lần, làm sau thì phải sửa lại từng handler. Nguyên tắc chọn: chỉ đưa vào base thứ có **ít nhất 2 chỗ dùng thật trong Phase 1** — còn lại để feature nào cần thì tự viết.
 
-### A14. Paging — `PagedResult<T>` ✅ nên có
+### A14. Paging — `PagedResult<T>` ✅ (code xong ở Batch 2, 15/08/2026)
 
 Dashboard có thể tới ~5.000 video (50 channel × 100 video đang track). Trả hết một lần là hỏng cả API lẫn Angular. Và vì FE là project riêng, **hình dạng response phải chốt ngay từ base** — đổi sau là sửa cả hai đầu.
 
-```csharp
-// Application/Common/Models/PagedResult.cs
-public record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount)
-{
-    public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
-    public bool HasNext => Page < TotalPages;
-}
+Code thật: [`../src/YTTrending.Application/Common/Models/Pagination/PagedResult.cs`](../src/YTTrending.Application/Common/Models/Pagination/PagedResult.cs), [`PagedQuery.cs`](../src/YTTrending.Application/Common/Models/Pagination/PagedQuery.cs), [`Extensions/QueryableExtensions.cs`](../src/YTTrending.Application/Common/Extensions/QueryableExtensions.cs). Bản đầu của mục này **lệch 3 chỗ** so với code cuối — giữ lại đây vì là cạm bẫy dễ gõ nhầm theo trí nhớ:
 
-// Application/Common/Models/PagedQuery.cs — base cho mọi query có phân trang
-public abstract record PagedQuery
-{
-    private const int MaxPageSize = 100;
-    private int _pageSize = 20;
+**Ba chỗ code thật khác sketch ban đầu** — nếu đọc lại notes rồi gõ theo trí nhớ thì sẽ ra bản cũ:
 
-    public int Page { get; init; } = 1;
-    public int PageSize
-    {
-        get => _pageSize;
-        init => _pageSize = value is < 1 or > MaxPageSize ? 20 : value;   // chặn ?pageSize=100000
-    }
-}
+1. **`PagedQuery.Page` cũng phải chặn**, không chỉ `PageSize`. Sketch để `Page { get; init; } = 1` trần → `?page=0` cho ra `Skip((0-1)*20)` = `Skip(-20)` → Postgres báo *"OFFSET must not be negative"*, tức **500** chứ không phải trang rỗng.
+2. **Vượt trần thì kẹp về trần, không reset về default.** Sketch viết `value is < 1 or > MaxPageSize ? 20 : value` — xin 150 lại nhận 20. Bản thật `value < 1 ? DefaultPageSize : Math.Min(value, MaxPageSize)`: xin 150 được 100, sát ý định người gọi hơn.
+3. **`PagedResult` ném khi `PageSize < 1`.** Bỏ trống thì `TotalCount / (double)0` ra `Infinity`, `(int)Math.Ceiling(Infinity)` trong ngữ cảnh `unchecked` mặc định ra **`int.MinValue`** — `totalPages: -2147483648` đi thẳng ra JSON, không throw không log. Đúng cạm bẫy A4 mục (b).
 
-// Application/Common/Extensions/QueryableExtensions.cs
-public static async Task<PagedResult<T>> ToPagedResultAsync<T>(
-    this IQueryable<T> query, int page, int pageSize, CancellationToken ct)
-{
-    var total = await query.CountAsync(ct);
-    var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
-    return new PagedResult<T>(items, page, pageSize, total);
-}
-```
+> ⚠️ Validate phải nằm ở **`init` accessor + backing field**, không phải ở property initializer của positional record. Bản initializer chỉ chạy ở primary constructor — `result with { PageSize = 0 }` đi qua copy-constructor (chép thẳng backing field) nên vẫn lọt.
 
-Ba lưu ý:
+Hai hành vi ngược nhau cho cùng một field là **cố ý**: `PagedQuery` nhận số từ query string của client → kẹp; `PagedResult` chỉ do code mình dựng → sai là bug, ném. Cùng ranh giới với `Result.Value` (A15) và `VideoStateRules` (S2).
+
+Bốn lưu ý:
 - **Cap `PageSize` ngay trong model**, đừng tin FE. Không có auth thì cũng không có ai chặn `?pageSize=999999`.
-- `.Skip()` **bắt buộc phải có `OrderBy` đứng trước**, nếu không Postgres trả thứ tự không xác định và trang 2 lặp lại item của trang 1. Đây là bug kinh điển của offset paging.
+- ⚠️ `.Skip()` **bắt buộc có `OrderBy` đứng trước, và `OrderBy` phải kèm khóa duy nhất.** Thiếu `OrderBy` thì Postgres trả thứ tự không xác định — bug kinh điển của offset paging. Nhưng **có `OrderBy` vẫn chưa đủ**: sort theo `Score`/`LatestViews` mà 200 video cùng giá trị thì ties vẫn được phép đảo giữa 2 lần query, trang 2 vẫn lặp item. Luôn kết bằng `.ThenBy(x => x.Id)`.
+- **Đã cân nhắc nhận `IOrderedQueryable<T>` để compiler ép `OrderBy`, và bỏ.** `Select()` trả `IQueryable` nên type mất tính ordered dù SQL vẫn đúng → chặn nhầm cả code đúng; và nó không chặn được ties, tức bịt cửa dễ để hở cửa khó. Lý do đầy đủ ở [`../docs/decisions.md`](../docs/decisions.md) mục *Batch 2*. Bù lại bằng XML doc `<remarks>` ngay trên `ToPagedResultAsync` — lời nhắc nằm đúng chỗ IntelliSense hiện lúc gõ.
 - Offset paging là đủ ở quy mô này. Keyset/cursor chỉ đáng làm khi bảng lên hàng triệu dòng — không phải Phase 1.
 
-### A15. Result pattern — bản trong docs còn thiếu 2 thứ ⚠️
+### A15. Result pattern — bản đầy đủ ✅ (code xong ở Batch 1, 12/08/2026)
 
-[`../docs/architecture.md`](../docs/architecture.md#L172) mới có `Result<T>`. Thực tế cần thêm:
+Bản phác đầu chỉ có `Result<T>`; **code thật** ở [`../src/YTTrending.Application/Common/Models/Results/Result.cs`](../src/YTTrending.Application/Common/Models/Results/Result.cs) + [`Error.cs`](../src/YTTrending.Application/Common/Models/Results/Error.cs) (dời vào `Models/` ở Batch 2 — xem luật xếp folder cuối S3) bổ sung 3 điểm:
 
 **(1) `Result` không generic** — cho command không trả gì (`ToggleChannel`, `DeleteSavedIdea`). Không có thì phải viết `Result<bool>` hoặc `Result<Unit>` khắp nơi, xấu và vô nghĩa.
 
 **(2) `Error` chứa được nhiều lỗi field** — FluentValidation trả về một **danh sách** lỗi theo từng field, còn `Error` hiện tại chỉ có 1 `Message`. `ValidationBehavior` sẽ phải nuốt bớt lỗi, và Angular không hiển thị được lỗi dưới từng ô input.
 
-```csharp
-public record Error(string Code, ErrorType Type, string Message)
-{
-    // thêm: lỗi validation nhiều field
-    public IReadOnlyDictionary<string, string[]>? Fields { get; init; }
+→ Code thật: [`../src/YTTrending.Application/Common/Models/Results/Error.cs`](../src/YTTrending.Application/Common/Models/Results/Error.cs) — `Error` + `Error.Fields` + factory `Validation(fields)`.
 
-    public static Error Validation(IReadOnlyDictionary<string, string[]> fields) =>
-        new("validation.failed", ErrorType.Validation, "Dữ liệu không hợp lệ") { Fields = fields };
-}
-```
-
-Ngoài ra thêm implicit conversion `Result<T>.Success` để handler viết `return channel.Id;` thay vì `return Result<int>.Success(channel.Id);` — nhỏ nhưng dùng ở mọi handler.
+**(3) Implicit conversion — đã cân nhắc rồi BỎ.** Bản đầu định thêm `implicit operator Result<T>(T)` để handler viết `return channel.Id;` thay vì `return Result<int>.Success(channel.Id);`. Bỏ vì mất khả năng đọc/grep: dòng `return channel.Id;` không có chữ nào cho biết đang tạo `Result<int>`, và text-search không tìm ra chỗ construct. Handler luôn gọi tường minh `Result<T>.Success(...)`/`Failure(...)`. Xem [`../docs/decisions.md`](../docs/decisions.md) mục *Application — mục 3, Batch 1*.
 
 ### A16. Middleware / pipeline — cần đúng 4 thứ
 
@@ -314,7 +244,7 @@ Single-user, nên **auto-migrate lúc startup**, nhưng có cờ tắt:
 
 ```csharp
 if (app.Configuration.GetValue<bool>("Database:AutoMigrate"))
-    await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+    await scope.ServiceProvider.GetRequiredService<YTTrendingDbContext>().Database.MigrateAsync();
 ```
 
 Dùng `MigrateAsync()`, **tuyệt đối không `EnsureCreated()`** — `EnsureCreated` tạo schema bỏ qua hệ thống migration, sau đó không migrate tiếp được, phải drop DB làm lại.
@@ -330,6 +260,7 @@ FE là project riêng nên mỗi lần đổi hình dạng response là sửa ha
 - **Ngày giờ**: `DateTimeOffset` → ISO 8601 có offset, Angular parse thẳng.
 - **Lỗi luôn cùng một hình dạng** — chính là `Error { code, type, message, fields? }` (A15), để Angular viết **một** `HttpInterceptor` xử lý hết.
 - **List luôn bọc `PagedResult`** (A14), kể cả khi ít item — đừng chỗ trả mảng trần, chỗ trả object.
+- **Key trong `fields` là camelCase** — `ValidationBehavior` (Batch 5) hạ chữ cái đầu của `PropertyName` ngay tại nguồn. `JsonNamingPolicy.CamelCase` mặc định **chỉ** đổi tên property, **không** đổi key của `Dictionary`; không chuyển ở behavior thì `fields` lệch dạng PascalCase (`YoutubeChannelId`) giữa một response toàn camelCase. Chuyển tại nguồn còn để đường job đọc `Error.Fields` (log) thấy cùng dạng với FE — xem [`../docs/decisions.md`](../docs/decisions.md) mục *Batch 5* QĐ #4.
 
 ### A20. ❌ Những thứ KHÔNG đưa vào base
 
@@ -338,7 +269,7 @@ FE là project riêng nên mỗi lần đổi hình dạng response là sửa ha
 | AutoMapper | Query đã `Select(v => new Dto(...))` trực tiếp — thêm mapper là thêm một lớp phải debug, và mất luôn khả năng EF dịch projection xuống SQL |
 | Specification pattern | Cùng lý do bỏ Repository — filter cố định, viết thẳng dễ đọc hơn (A17) |
 | Generic `BaseController<T>` / CRUD generic | 3 controller, mỗi cái vài action, chả có gì chung ngoài `ISender` |
-| `BaseEntity<TId>` generic | Khóa toàn `int`, không cần generic hóa. `AuditableEntity` là đủ (A4) |
+| `BaseEntity` gom `Id` + audit (generic hay không) | Khóa **không đồng nhất**, gom lại cũng không dùng được: `video_metric_snapshots.id` là BIGINT còn lại là INT, `trending_scores` lấy luôn `video_id` làm PK nên không có cột `id`. Audit cũng chỉ 2/5 bảng có (A4) → chỉ `Channel` + `Video` vừa, tức là base class cho đúng 2 entity. Giữ `AuditableEntity` đúng tên gọi: tên này chính là bộ lọc của `ChangeTracker.Entries<AuditableEntity>()`, đặt là `BaseEntity` sẽ mời gọi cho cả 5 entity kế thừa rồi audit ngầm chạy lên bảng không có cột |
 | Unit of Work | `SaveChangesAsync` đã là UoW |
 | Caching (IMemoryCache/Redis) | Chưa biết chỗ nào chậm. Thêm cache trước khi đo là tự tạo bug stale data |
 | API versioning | Một client duy nhất do chính mình viết |
@@ -371,6 +302,32 @@ Model bên Angular viết tay, `swagger.json` chỉ dùng để tra cứu. Nghĩ
 ### A25. ❌ Đã cân nhắc thêm và vẫn bỏ
 
 `/health` endpoint (app chạy local, mở Swagger là biết sống hay chết) · rate limiting · response compression · `AddDbContextPool` · migration bundle · Docker hóa API.
+
+### A26. ⚠️ EF Core convention không tự nhận PK/FK khi entity thiếu navigation property
+
+Phát hiện khi chuẩn bị viết Configuration cho mục 4, trước khi có `YTTrendingDbContext` thật — đúng kiểu lỗi chỉ lộ ra lúc bắt tay code, không lộ ra lúc đọc docs.
+
+**a) `TrendingScore` cần `HasKey` tường minh — đã sửa.** Convention của EF Core chỉ tự nhận property tên `Id` hoặc `{TênClass}Id` làm khóa chính. `TrendingScore.VideoId` không khớp pattern nào (tên class là `TrendingScore`, không phải `Video`) — bỏ qua thì `dotnet ef migrations add` chết ngay với lỗi "no key defined".
+
+```csharp
+// Persistence/Configurations/TrendingScoreConfiguration.cs
+builder.HasKey(t => t.VideoId);
+```
+
+**b) `VideoMetricSnapshot` và `TrendingScore` không có navigation property tới `Video`** (đúng theo quyết định "1 chiều từ Video" ở [`../docs/decisions.md`](../docs/decisions.md)) — nghĩa là quan hệ FK cũng **không** tự động được tạo qua convention, `VideoId` sẽ chỉ là cột `int`/`long` trơn, không có ràng buộc khóa ngoại ở DB. **Đã xử lý ở mục 4** — khai `HasOne<Video>()` không tham số (overload không-navigation) rồi nối `.WithMany()` cho snapshot, `.WithOne(v => v.TrendingScore)` cho score, và `HasForeignKey` tường minh. Khác với `Video.Channel` — cái đó có navigation nên convention tự nhận.
+
+```csharp
+// VideoMetricSnapshotConfiguration — 1-nhiều, HasForeignKey không cần tham số kiểu
+builder.HasOne<Video>().WithMany().HasForeignKey(s => s.VideoId);
+
+// TrendingScoreConfiguration — 1-1, HasForeignKey<T> BẮT BUỘC có tham số kiểu
+// để chỉ rõ bên nào là dependent
+builder.HasOne<Video>().WithOne(v => v.TrendingScore).HasForeignKey<TrendingScore>(t => t.VideoId);
+```
+
+Đã nghiệm thu bằng `psql \d`: cả `fk_video_metric_snapshots_videos_video_id` lẫn `fk_trending_scores_videos_video_id` đều có thật trong DB. Đây là điểm dễ mất nhất của mục 4 — sai thì migration vẫn chạy ngon, chỉ là cột `int` trơn không ai chặn.
+
+**c) `Infrastructure.csproj` thiếu `ProjectReference` tới `Application` — đã sửa.** Không phải lỗi EF Core mà là lỗi build cơ bản (`YTTrendingDbContext : ..., IYTTrendingDbContext` không compile được nếu thiếu), nhưng cùng nhóm "chỉ lộ ra khi thật sự bắt tay code".
 
 ---
 
@@ -417,56 +374,90 @@ Ghi chú lúc làm:
 
 ### S2. Domain
 
-- [ ] `Enums/VideoStatus.cs` — New / Tracking / Archived
-- [ ] `Common/AuditableEntity.cs` (A4)
-- [ ] `Entities/`: `Channel`, `Video`, `VideoMetricSnapshot`, `TrendingScore`, `SavedIdea`
+- [x] `Enums/VideoStatus.cs` — New / Tracking / Archived
+- [x] `Common/AuditableEntity.cs` (A4)
+- [x] `Entities/`: `Channel`, `Video`, `VideoMetricSnapshot`, `TrendingScore`, `SavedIdea`
 
-Theo đúng [`../docs/database.md`](../docs/database.md). Quy tắc: private setter + static factory `Create(...)`, không object initializer.
+Theo đúng [`../docs/database.md`](../docs/database.md). Quy tắc: **anemic — entity chỉ có property `{ get; set; }`, không method, không ctor, không static factory.** Tạo bằng object initializer.
 
-Hai invariant phải nằm ở đây, không để Application tự set:
-- `Video.Archive(now)` — ném lỗi nếu đã ARCHIVED (terminal state), đồng thời set `ArchivedAt`
-- `Video.StartTracking()` — chỉ từ NEW
+> ⚠️ Mục này ban đầu làm theo hướng ngược lại (static factory + private setter + invariant trong entity) rồi **đổi sang anemic ngày 07/08/2026**. Số đo lúc quyết định: cả Domain layer chỉ có **2 câu `if`**, 8/15 method là nghi lễ gán thuần quanh `private set`. Lý do đầy đủ + đánh đổi: bảng "Đã cân nhắc và bỏ qua" ở [`../docs/architecture.md`](../docs/architecture.md).
 
-✅ Nghiệm thu: build sạch, không project nào reference vào Domain ngoài Application.
+`videos` có thêm 3 cột denormalize `latest_views` / `latest_likes` / `latest_comments` (BIGINT) — Discovery seed lần đầu rồi Metrics Update Job ghi đè mỗi lần sync, dashboard filter/sort theo views không phải join `video_metric_snapshots`. `trending_scores.trending_score` đổi tên cột thành `score` (property Domain là `TrendingScore.Score` — class không được có member trùng tên class, CS0542). Cả hai đã cập nhật ở [`../docs/database.md`](../docs/database.md).
+
+**`required` thay vai trò của factory.** Bỏ `Create(...)` là mất bảo đảm "tạo xong là đủ field" — bù bằng `required` trên cột NOT NULL không có default hợp lý, compiler chặn bằng CS9035. Đổi lại được object initializer có tên từng field, không còn bẫy `Video.Create()` 11 tham số vị trí với `views`/`likes`/`comments` cùng kiểu `long` nằm cạnh nhau.
+
+⚠️ **Hai default bắt buộc khai tường minh** — thứ mà factory từng lo hộ:
+- `Channel.IsEnabled { get; set; } = true` — quên là channel vừa add đã bị tắt tracking, job bỏ qua **im lặng**, không có lỗi nào báo.
+- `Video.Status { get; set; } = VideoStatus.New` — hiện `New` tình cờ là giá trị 0 của enum nên quên vẫn đúng, nhưng đừng dựa vào thứ tự enum.
+
+⚠️ **Nullable + EF Core** (`WarningsAsErrors=nullable` đang bật — A2): navigation property luôn `= null!` (EF chỉ gán khi `Include`). Không còn ctor nên hết chuyện EF bind tham số.
+
+Hai invariant **không nằm ở Domain** — chúng ở `Application/Common/VideoStateRules.cs`:
+- `VideoStateRules.Archive(video, now)` — ném lỗi nếu đã ARCHIVED (terminal state), đồng thời set `ArchivedAt`. Không giới hạn trạng thái nguồn — NEW → ARCHIVED thẳng vẫn hợp lệ (xem [`../docs/domain/video-lifecycle.md`](../docs/domain/video-lifecycle.md))
+- `VideoStateRules.StartTracking(video)` — chỉ từ NEW
+
+Đây là **quy ước, không phải ràng buộc compiler**: `video.Status = ...` vẫn compile được. Mọi chỗ đổi trạng thái phải tự đi qua `VideoStateRules` — không có gì nhắc, nên nhớ khi review.
+
+Invariant vi phạm ném `InvalidOperationException`, không tạo `DomainException` riêng — đây là bug gọi sai thứ tự ở Application, không phải lỗi nghiệp vụ dự kiến được nên không đi qua `Result` ([`../docs/architecture.md`](../docs/architecture.md)).
+
+✅ Nghiệm thu: build sạch, không project nào reference vào Domain ngoài Application. Probe `new Video { Title = "x" }` phải ra CS9035 (chứng minh `required` có hiệu lực).
 
 ---
 
 ### S3. Application — phần Common
 
-- [ ] `Common/Result.cs`, `Common/Error.cs` — bản đầy đủ: thêm `Result` không generic + `Error.Fields` + implicit conversion (A15)
-- [ ] `Common/Models/PagedResult.cs`, `Common/Models/PagedQuery.cs` (A14)
-- [ ] `Common/Extensions/QueryableExtensions.cs` — `ToPagedResultAsync`, `WhereIf` (A14, A17)
-- [ ] `Common/Interfaces/IAppDbContext.cs` — 5 `DbSet<T>` + `SaveChangesAsync`
-- [ ] `Common/Interfaces/IYouTubeClient.cs` — `GetChannelAsync`, `GetRecentShortsAsync`, `GetVideoStatsAsync` (ký chữ tạm, sửa khi làm Discovery)
-- [ ] `Common/Behaviors/`: `LoggingBehavior`, `ValidationBehavior` (gom lỗi vào `Error.Fields`)
-- [ ] `Common/Options/`: `TrackingOptions`, `TrendingOptions`, `JobOptions` — kèm DataAnnotations (`[Range]`) để `ValidateOnStart` bắt được
-- [ ] `DependencyInjection.cs` → `AddApplication()`
+- [x] `Common/Models/Results/Result.cs`, `Common/Models/Results/Error.cs` — bản đầy đủ: thêm `Result` không generic + `Error.Fields`. **Không** implicit conversion (A15 đề xuất rồi bỏ — [`../docs/decisions.md`](../docs/decisions.md) mục *Batch 1*)
+- [x] `Common/Models/Pagination/PagedResult.cs`, `Common/Models/Pagination/PagedQuery.cs` (A14)
+- [x] `Common/Extensions/QueryableExtensions.cs` — `ToPagedResultAsync`, `WhereIf` (A14, A17)
+- [x] `Common/Interfaces/IYTTrendingDbContext.cs` — 5 `DbSet<T>` + `SaveChangesAsync` *(làm sớm ở mục 4 vì `YTTrendingDbContext` cần implement nó)*
+- [x] `Common/Interfaces/Integrations/IYouTubeClient.cs` — signature ban đầu gồm `GetChannelAsync`, `GetRecentShortsAsync(limit)` và `GetVideoStatsAsync`. 3 DTO ở `Common/Models/Youtube/YouTubeModels.cs`. **Đã thay ở Discovery 06/09/2026**: `GetRecentShortsPageAsync(uploadsPlaylistId, pageToken, ct)` trả `ShortsPage` để handler áp dụng `RecentDays`/quota; xem [`../docs/decisions.md`](../docs/decisions.md) mục *Background job thật*.
+- [x] `Common/Behaviors/`: `LoggingBehavior`, `ValidationBehavior` (gom lỗi vào `Error.Fields`) — fail → `Result.Failure` qua reflection (ràng `where TResponse : IResult`), key `fields` camelCase chuyển tại nguồn. Xem [`../docs/decisions.md`](../docs/decisions.md) mục *Batch 5*
+- [x] `Common/Options/`: `TrackingOptions`, `TrendingOptions`, `JobOptions` — kèm DataAnnotations (`[Range]`) để `ValidateOnStart` bắt được
+- [x] `DependencyInjection.cs` → `AddApplication()`
+
+**Luật xếp folder trong `Common/`** (cấu trúc chi tiết hiện hành xem [`../docs/coding-convention.md`](../docs/coding-convention.md) mục 4):
+
+- **`Models/`** — contract dùng chung, chia theo nhóm ổn định: `Results/`, `Pagination/`, `Filter/`, `Youtube/`, `Sync/`. DTO một feature vẫn nằm trong `Features/<Feature>/Dtos/`.
+- **`Interfaces/`** chia theo capability: `Concurrency/`, `Integrations/`, `Jobs/`, `Persistence/`, `Services/`; folder còn lại theo vai trò (`Options/`, `Extensions/`, `Behaviors/`, `Services/`).
+- **Root** chỉ giữ thứ không rơi vào các nhóm trên — hiện là `VideoStateRules.cs`.
+
+Không tạo folder chưa có nhóm ổn định chỉ để chứa một type. Lý do và ranh giới Application/Infrastructure xem [`../docs/decisions.md`](../docs/decisions.md) mục *Application / Infrastructure — cấu trúc folder*.
 
 ✅ Nghiệm thu: build sạch. Application **không** reference Npgsql.
 
 ---
 
-### S4. Infrastructure — Persistence
+### S4. Infrastructure — Persistence ✅ ĐÃ LÀM
 
-- [ ] `Persistence/AppDbContext.cs` : `DbContext, IAppDbContext` + inject `TimeProvider` + override `SaveChanges`/`SaveChangesAsync` cho audit (A4)
-- [ ] `Persistence/Configurations/` — 5 file `IEntityTypeConfiguration<T>`
+- [x] `Persistence/YTTrendingDbContext.cs` : `DbContext, IYTTrendingDbContext` + inject `TimeProvider` + override `SaveChanges`/`SaveChangesAsync` cho audit (A4)
+- [x] `Persistence/Configurations/` — 5 file `IEntityTypeConfiguration<T>`
   - unique index `youtube_video_id`, `youtube_channel_id`, `saved_ideas.video_id`
   - `HasQueryFilter(v => v.DeletedAt == null)` trên `Video`
   - `Status` → `HasConversion<string>()` (A11)
-- [ ] `DependencyInjection.cs` → `AddInfrastructure(config)`: `AddDbContext` + `UseNpgsql` + `UseSnakeCaseNamingConvention()` (A3), bind Options, `AddSingleton(TimeProvider.System)`
-- [ ] Migration `InitialCreate` + auto-migrate lúc startup có cờ `Database:AutoMigrate` (A18)
+  - `TrendingScore` cần `HasKey` + FK tường minh, `VideoMetricSnapshot` cần FK tường minh (A26)
+  - **`HasMaxLength` / `HasPrecision` phải khai tay theo [`../docs/database.md`](../docs/database.md)** — không khai thì Npgsql map mọi `string` thành `text` (chạy được nhưng lệch schema đã chốt), còn `decimal` không khai `HasPrecision` thì EF cảnh báo *"No store type was specified for the decimal property"*. Cột nào cố tình muốn `text` (`Description`, `Note`) thì bỏ trống **và ghi comment nói rõ là cố ý**, không thì lần sau đọc lại tưởng quên.
+  - Không khai `OnDelete`: mặc định của EF cho FK bắt buộc đã là `Cascade`, đúng ý. `required` trên entity tự thành `NOT NULL`, không cần `IsRequired()`.
+- [x] `DependencyInjection.cs` → `AddInfrastructure(config)`: `AddDbContext` + `UseNpgsql` + `UseSnakeCaseNamingConvention()` (A3), `AddSingleton(TimeProvider.System)`, `AddScoped<IYTTrendingDbContext>` trỏ về cùng instance — **bind Options còn nợ**, chờ mục 3 có Options class.
+- [x] Migration `InitialCreate` + auto-migrate lúc startup có cờ `Database:AutoMigrate` (A18)
 
 ```bash
-dotnet tool install --global dotnet-ef
 dotnet ef migrations add InitialCreate \
   -p src/YTTrending.Infrastructure -s src/YTTrending.API \
   -o Persistence/Migrations
 dotnet ef database update -p src/YTTrending.Infrastructure -s src/YTTrending.API
 ```
 
-⚠️ Mở file migration sinh ra **đọc trước khi apply** — kiểm tra tên cột đã snake_case chưa, `status` là `text` chưa, `views/likes/comments` là `bigint` chưa.
+⚠️ **`dotnet-ef` phải cùng dòng version với runtime EF Core.** Tool global 7.0.10 + runtime 8.0.11 → EF từ chối chạy: *"The Entity Framework tools version '7.0.10' is older than that of the runtime '8.0.11'."* Nâng bằng `dotnet tool update --global dotnet-ef --version 8.*` rồi `dotnet ef --version` kiểm lại. Cùng bẫy này lặp lại mỗi lần nâng EF Core.
 
-✅ Nghiệm thu: 5 bảng trong Postgres, tên cột đúng như [`../docs/database.md`](../docs/database.md).
+⚠️ Đi đường Package Manager Console thì cần thêm package `Microsoft.EntityFrameworkCore.Tools` vào Infrastructure mới có cmdlet `Add-Migration`. PMC cũng **tự thêm `Microsoft.EntityFrameworkCore.Design` vào startup project (API)** dạng trần — phải khai lại kèm `PrivateAssets=all` + `IncludeAssets` cho khớp Infrastructure, không thì rò assembly design-time ra output.
+
+⚠️ **`-o Persistence/Migrations` đừng bỏ sót**, và tên migration theo A18 (động từ + đối tượng, PascalCase). Thiếu `-o` là migration rơi vào `Infrastructure/Migrations/`, lệch cấu trúc ở [`../docs/architecture.md`](../docs/architecture.md) — sửa sau thì phải drop DB sinh lại vì `migration_id` nằm trong `__EFMigrationsHistory`.
+
+⚠️ Mở file migration sinh ra **đọc trước khi apply** — tên cột đã snake_case chưa, `status` là `character varying(16)` chưa (không phải enum native), `views/likes/comments` là `bigint` chưa, `trending_scores` PK có đúng là `video_id` và **không** có cột `id` chưa, FK của `video_metric_snapshots` + `trending_scores` có thật chưa (A26).
+
+ℹ️ EF sẽ log `PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning` — do `Video` có query filter soft-delete còn 3 entity con phụ thuộc bằng FK bắt buộc. Chỉ là nhắc nhở, không vỡ build (`WarningsAsErrors=nullable` chỉ áp cho nullable của C#).
+
+✅ Nghiệm thu: 5 bảng trong Postgres, tên cột đúng như [`../docs/database.md`](../docs/database.md) · `dotnet ef migrations has-pending-model-changes` báo không lệch. **Không** dùng `EnsureCreated()` để tạo schema — nó bỏ qua hệ thống migration, sau đó không migrate tiếp được.
 
 ---
 
@@ -490,7 +481,7 @@ dotnet ef database update -p src/YTTrending.Infrastructure -s src/YTTrending.API
 Slice mỏng nhất chứng minh cả 4 layer thông nhau.
 
 - [ ] `Features/Channels/Commands/AddChannel/` — Command + Handler + Validator
-- [ ] `Features/Channels/Queries/GetChannels/` — dùng `PagedQuery` + `ToPagedResultAsync` để nghiệm thu luôn khối paging (A14)
+- [ ] `Features/Channels/Queries/GetChannels/` — dùng `PagedQuery` (A14). Paging thật đi qua `ChannelRepository.GetPagedAsync`, **không phải** `ToPagedResultAsync` trực tiếp — Repository trả list đã materialize chứ không phải `IQueryable`, xem [`../docs/decisions.md`](../docs/decisions.md) mục 6 (Repository/UnitOfWork là pattern chuẩn của dự án).
 - [ ] `Infrastructure/YouTube/FakeYouTubeClient.cs` (A6)
 - [ ] `Controllers/ChannelsController.cs` — `POST` + `GET` (paged)
 
@@ -498,7 +489,7 @@ Slice mỏng nhất chứng minh cả 4 layer thông nhau.
 - POST qua Swagger → 200 + row trong `channels`, `created_at`/`updated_at` tự điền (chứng minh interceptor chạy — A4)
 - POST lại đúng ID đó → **409 Conflict** (Result pattern map status đúng)
 - POST rỗng → **400** kèm `fields` chỉ rõ ô nào sai (ValidationBehavior + `Error.Fields` — A15)
-- GET `?page=1&pageSize=2` → đúng hình dạng `PagedResult`; `?pageSize=999999` → bị cap về 20 (A14)
+- GET `?page=1&pageSize=2` → đúng hình dạng `PagedResult`; `?pageSize=999999` → bị cap về **100** (`MaxPageSize`, A14)
 
 ---
 
@@ -519,6 +510,8 @@ Không làm ở base. Khi nào làm, việc còn lại chỉ là: tạo `tests/Y
 ✅ Nghiệm thu: `Jobs:Enabled = false` → không thấy log job. Bật lên → thấy log theo đúng chu kỳ.
 
 Xong S7 là hết base. Feature thật bắt đầu ở [`../docs/domain/discovery-engine.md`](../docs/domain/discovery-engine.md).
+
+> **01/09/2026:** gộp thẳng S7 vào bản thật, bỏ qua bước "khung rỗng". Sync-all hiện theo [`plans/sync-run-async.md`](plans/sync-run-async.md); xem thêm [`../docs/decisions.md`](../docs/decisions.md) mục *Background job thật*.
 
 ---
 

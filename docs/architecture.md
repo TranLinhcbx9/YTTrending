@@ -6,11 +6,13 @@ Mô tả kiến trúc kỹ thuật: layer nào chịu trách nhiệm gì, phụ 
 
 Nguyên tắc xuyên suốt: **Clean Architecture + CQRS ở mức tối thiểu đủ dùng**. Mỗi lớp trừu tượng phải trả lời được "nó chặn được lỗi gì?" — không trả lời được thì bỏ.
 
+> **Doc này mô tả cấu trúc, không chứa code.** Code thật ở [`../src/`](../src/); rule tra nhanh ở [`coding-convention.md`](coding-convention.md); "vì sao chọn/bỏ" ở [`decisions.md`](decisions.md).
+
 ## Tech Stack
 
 | Thành phần | Lựa chọn | Ghi chú |
 |---|---|---|
-| Runtime | **.NET 8 (LTS)** | Hết support 10/11/2026 — Phase 2 tính chuyện lên .NET 10 |
+| Runtime | **.NET 8 (LTS)** | Hết support 10/11/2026 — trước khi chạm mốc này, việc nâng runtime phải được đánh giá như một quyết định riêng |
 | API | ASP.NET Core Web API + Controllers | Đã có sẵn `Program.cs` + Swagger |
 | CQRS | **MediatR 12.x** | Dùng dòng 12 (Apache-2.0, miễn phí). MediatR 13+ đã chuyển license thương mại — **không** nâng lên 13 |
 | Validation | FluentValidation 11.x | Chạy qua `ValidationBehavior` |
@@ -25,7 +27,7 @@ YTTrending.API             → Composition root: Controllers, DI wiring, appsett
       ↓
 YTTrending.Infrastructure  → EF Core DbContext, YouTube API client, Background Jobs
       ↓
-YTTrending.Application     → Command/Query handler, interface (IAppDbContext, IYouTubeClient), Options
+YTTrending.Application     → Command/Query handler, interface (Repository pattern + IUnitOfWork, IYouTubeClient), Options
       ↓
 YTTrending.Domain          → Entities, Enums, invariant — không phụ thuộc project nào khác
 ```
@@ -39,9 +41,9 @@ YTTrending.Domain          → Entities, Enums, invariant — không phụ thu�
 | **Infrastructure** | Application | EF Core + Npgsql, Http.Resilience, Hosting | (không cấm gì đặc biệt) |
 | **API** | Application **+ Infrastructure** | ASP.NET, Swashbuckle | `using` DbContext / entity EF trong Controller |
 
-> **Vì sao API vẫn reference Infrastructure?** Vì API là composition root — không thể gọi `services.AddInfrastructure()` mà không "thấy" project đó. Ranh giới thật nằm ở chỗ: **Controller chỉ được biết `ISender` và DTO**, tuyệt đối không chạm `AppDbContext`. Đây là quy ước, compiler không chặn được.
+> **Vì sao API vẫn reference Infrastructure?** Vì API là composition root — không thể gọi `services.AddInfrastructure()` mà không "thấy" project đó. Ranh giới thật nằm ở chỗ: **Controller chỉ được biết `ISender` và DTO**, tuyệt đối không chạm `YTTrendingDbContext`. Đây là quy ước, compiler không chặn được.
 
-> **Application vẫn phụ thuộc EF Core — và điều đó ổn.** `IAppDbContext` expose `DbSet<T>`, còn `FirstOrDefaultAsync`/`AsNoTracking` là extension của EF. Nói "Application không biết EF" là tự lừa mình. Ranh giới thật là **provider**: đổi Postgres → SQL Server chỉ động vào Infrastructure.
+> **Application vẫn phụ thuộc EF Core — và điều đó ổn.** Lý do hiện tại: `IQueryable<T>` + `CountAsync`/`ToListAsync` (EF async LINQ) trong `QueryableExtensions.cs` — không còn qua `IYTTrendingDbContext` (đã xoá, xem [`decisions.md`](decisions.md) mục 6). Ranh giới thật là **provider**: đổi Postgres → SQL Server chỉ động vào Infrastructure.
 
 ## Cấu trúc thư mục
 
@@ -53,10 +55,22 @@ src/
 │
 ├── YTTrending.Application/
 │   ├── Common/
-│   │   ├── Interfaces/     IAppDbContext, IYouTubeClient
+│   │   ├── Interfaces/
+│   │   │   ├── Concurrency/  IChannelSyncLock, ISyncRunCreationLock
+│   │   │   ├── Integrations/ IYouTubeClient
+│   │   │   ├── Jobs/         ISyncRunQueue
+│   │   │   ├── Persistence/  IRepository<T>, aggregate repositories, IUnitOfWork
+│   │   │   └── Services/     IShortsDiscoveryService, IVideoSyncService
+│   │   ├── Models/
+│   │   │   ├── Results/      Error, Result
+│   │   │   ├── Pagination/   PagedQuery, PagedResult
+│   │   │   ├── Filter/       ChannelFilter, VideoFilter, SyncRunItemFilter
+│   │   │   ├── Youtube/      ChannelInfo, ShortVideoInfo, ShortsPage, VideoStats
+│   │   │   └── Sync/         ShortsDiscoveryResult, VideoSyncResult
 │   │   ├── Behaviors/      LoggingBehavior, ValidationBehavior
 │   │   ├── Options/        TrackingOptions, TrendingOptions
-│   │   └── Result.cs, Error.cs
+│   │   ├── Services/       application-service implementations
+│   │   └── VideoStateRules.cs
 │   └── Features/
 │       ├── Channels/       Commands/ (AddChannel, ToggleChannel) + Queries/
 │       ├── Videos/         Queries/ (GetDashboard, GetVideoDetail)
@@ -65,11 +79,16 @@ src/
 │
 ├── YTTrending.Infrastructure/
 │   ├── Persistence/
-│   │   ├── AppDbContext.cs
+│   │   ├── YTTrendingDbContext.cs
 │   │   ├── Configurations/     IEntityTypeConfiguration<T>
-│   │   └── Migrations/
-│   ├── YouTube/                YouTubeClient (typed HttpClient)
-│   ├── BackgroundJobs/         SyncChannelJob, MetricsUpdateJob, CleanupJob
+│   │   ├── Repositories/
+│   │   └── Migrations/          EF-generated only
+│   ├── Concurrency/            ChannelSyncLock, SyncRunCreationLock
+│   ├── YouTube/                YouTubeClient, FakeYouTubeClient
+│   ├── Jobs/
+│   │   ├── Sync/                SyncRunQueue, SyncRunWorker, SyncChannelJob
+│   │   ├── Metrics/             MetricsUpdateJob
+│   │   └── Cleanup/             CleanupJob
 │   └── DependencyInjection.cs
 │
 └── YTTrending.API/
@@ -87,21 +106,26 @@ Một feature = một folder, chứa Command/Query + Handler + Validator cạnh 
 
 ### YTTrending.Domain
 - Entity thuần + enum. Không attribute EF, không interface repository.
-- **Invariant nằm ở đây**: dùng static factory + private setter thay vì object initializer tự do.
-  - Ví dụ: `Video.Archive()` từ chối chuyển trạng thái nếu đang ARCHIVED (rule terminal-state ở [`domain/video-lifecycle.md`](domain/video-lifecycle.md)) — không để Application tự set `Status = ...`.
+- **Anemic model — entity chỉ chứa property, không method.** Property `{ get; set; }` công khai, tạo bằng object initializer, không static factory.
+  - Field bắt buộc dùng `required` để compiler chặn lúc khởi tạo (CS9035) — thay cho vai trò "tạo xong là đủ field" của factory.
+  - Field có default nghiệp vụ phải khai tường minh: `Channel.IsEnabled = true`, `Video.Status = VideoStatus.New`. Bỏ sót `IsEnabled` là channel vừa add đã tắt tracking mà không báo lỗi.
+- **Invariant KHÔNG nằm ở đây** — chuyển trạng thái video đi qua `Application/Common/VideoStateRules.cs` (rule terminal-state ở [`domain/video-lifecycle.md`](domain/video-lifecycle.md)).
+  - Đây là **quy ước, không phải ràng buộc compiler**: `video.Status = ...` vẫn compile được. Đánh đổi đã biết khi chọn anemic — xem [`decisions.md`](decisions.md) (Domain — mục 2).
 
 ### YTTrending.Application
 - Command/Query handler theo từng domain doc:
   - Discovery Engine — [`domain/discovery-engine.md`](domain/discovery-engine.md)
   - Trending Engine — [`domain/trending-engine.md`](domain/trending-engine.md)
   - Job orchestration — [`domain/background-jobs.md`](domain/background-jobs.md)
-- Khai báo interface ra ngoài: **chỉ 2 cái** — `IAppDbContext`, `IYouTubeClient`.
+- Khai báo interface ra ngoài: `IYouTubeClient` + Repository pattern (`IRepository<T>` base, repository riêng theo aggregate như `IChannelRepository`) + `IUnitOfWork` — pattern chuẩn từ mục 6, xem [`decisions.md`](decisions.md).
+- `Common/Models` chỉ chứa contract dùng chung; payload/DTO một feature sở hữu nằm cạnh feature trong `Features/<Feature>/Dtos/`. Thư mục chi tiết và quy tắc xếp file xem [`coding-convention.md`](coding-convention.md) mục 4.
 - Bind + validate Options — xem [`config.md`](config.md).
 
 ### YTTrending.Infrastructure
-- `AppDbContext : DbContext, IAppDbContext` + Fluent API configurations + migrations.
+- `YTTrendingDbContext : DbContext` + Fluent API configurations + migrations.
 - `YouTubeClient` (typed `HttpClient` + resilience handler).
 - 3 `BackgroundService` cho Sync / Metrics / Cleanup.
+- Lock in-memory nằm ở `Concurrency/`; queue, worker và scheduler sync nằm ở `Jobs/Sync/`, không dùng folder `Common/` chung chung.
 - `DependencyInjection.cs`: một extension `AddInfrastructure(config)` gom toàn bộ đăng ký.
 
 ### YTTrending.API
@@ -112,157 +136,53 @@ Một feature = một folder, chứa Command/Query + Handler + Validator cạnh 
 
 ### Command (luồng ghi) — qua Domain
 
-```csharp
-public record AddChannelCommand(string YoutubeChannelId) : IRequest<Result<int>>;
+Check nghiệp vụ → gọi `IYouTubeClient`/Repository tương ứng → đổi trạng thái qua `VideoStateRules` → `SaveChangesAsync` (qua `IUnitOfWork`) → trả `Result<T>`. Ví dụ `AddChannelCommand`: trùng channel → `Error.Conflict`, không tìm thấy → `Error.NotFound`, ok → `Result<ChannelDto>.Success(...)`.
 
-public class AddChannelCommandHandler(IAppDbContext db, IYouTubeClient youtube)
-    : IRequestHandler<AddChannelCommand, Result<int>>
-{
-    public async Task<Result<int>> Handle(AddChannelCommand request, CancellationToken ct)
-    {
-        var exists = await db.Channels
-            .AnyAsync(c => c.YoutubeChannelId == request.YoutubeChannelId, ct);
-        if (exists)
-            return Result<int>.Failure(Error.Conflict("channel.duplicate", "Channel đã được theo dõi"));
+### Query (luồng đọc) — qua Repository
 
-        var info = await youtube.GetChannelAsync(request.YoutubeChannelId, ct);
-        if (info is null)
-            return Result<int>.Failure(Error.NotFound("channel.not_found", "Không tìm thấy channel"));
+Đọc qua repository tương ứng (vd `IChannelRepository.GetPagedAsync`); implementation `.AsNoTracking()`, map thẳng vào DTO — không load entity thừa.
 
-        var channel = Channel.Create(info.Id, info.Name, info.Url);  // invariant check trong Domain
-        db.Channels.Add(channel);
-        await db.SaveChangesAsync(ct);
+→ Rule handler đầy đủ: [`coding-convention.md`](coding-convention.md) mục 5. Code slice đầu tiên ở `src/YTTrending.Application/Features/Channels/` (mục 6 — [`../ai/setup-base.md`](../ai/setup-base.md)).
 
-        return Result<int>.Success(channel.Id);
-    }
-}
-```
+### Repository + UnitOfWork — pattern chuẩn của dự án
 
-### Query (luồng đọc) — thẳng DbContext, không Repository
+Chốt lại ở mục 6 (21/08/2026), **đảo ngược quyết định "bỏ Repository" ban đầu — cho toàn dự án**, không riêng Channel. Bản trước của doc này (trước mục 6) từng bỏ hẳn `IChannelRepository`/`IVideoRepository`/`IMetricsSnapshotRepository`/`ISavedIdeaRepository`; Repository (`IRepository<T>` base + repository riêng theo aggregate) + `IUnitOfWork` hiện là cách chuẩn. `IChannelRepository`+`IUnitOfWork` (Channel) là implementation đầu tiên; aggregate mới theo cùng mẫu khi có use case cần truy cập dữ liệu. Lý do đảo lại và lịch sử quyết định paging xem [`decisions.md`](decisions.md) mục 6.
 
-```csharp
-public record GetDashboardQuery(int? ChannelId, decimal? MinScore) : IRequest<Result<List<VideoListItemDto>>>;
+`IYTTrendingDbContext` **đã xoá** (21/08/2026) — hết consumer sau khi Repository thay thế hoàn toàn; repository implementation inject thẳng class cụ thể `YTTrendingDbContext`.
 
-public class GetDashboardQueryHandler(IAppDbContext db)
-    : IRequestHandler<GetDashboardQuery, Result<List<VideoListItemDto>>>
-{
-    public async Task<Result<List<VideoListItemDto>>> Handle(GetDashboardQuery q, CancellationToken ct)
-    {
-        var items = await db.Videos
-            .AsNoTracking()
-            .Where(v => q.ChannelId == null || v.ChannelId == q.ChannelId)
-            .Select(v => new VideoListItemDto(v.YoutubeVideoId, v.Title, v.TrendingScore!.Score))
-            .ToListAsync(ct);
-
-        return Result<List<VideoListItemDto>>.Success(items);
-    }
-}
-```
-
-### Vì sao KHÔNG có Repository
-
-Bản trước của doc này khai `IChannelRepository`, `IVideoRepository`, `IMetricsSnapshotRepository`, `ISavedIdeaRepository` — **đã bỏ hết**. Lý do:
-
-- Repository tồn tại để đổi được nguồn dữ liệu. Ở đây chỉ có **một** DB duy nhất, vĩnh viễn.
-- `DbSet<T>` + `IQueryable` đã là Repository + Unit of Work rồi. Bọc thêm một lớp chỉ để `return _db.Videos.Where(...)` là gián tiếp thừa.
-- Query cần shape linh hoạt (dashboard nhiều filter, chi tiết video kèm chart) — bọc Repository sẽ đẻ ra `GetByChannelAndScoreAndDateRange...` vô tận.
-
-`IYouTubeClient` thì **giữ**, vì nó thật sự chặn được thứ có ích: test handler không cần gọi mạng thật.
+`IYouTubeClient` thì **giữ nguyên vai trò riêng** — gọi API ngoài, không phải data access nội bộ, nên không nằm trong phạm vi đảo quyết định này.
 
 ## Result Pattern
 
 Lỗi nghiệp vụ dự kiến được (duplicate channel, không tìm thấy video) → trả `Result`. Exception chỉ dành cho lỗi hạ tầng bất thường (mất kết nối DB, bug).
 
-```csharp
-public enum ErrorType { Validation, NotFound, Conflict }
+Ba kiểu: `Result` (command không trả gì — tránh `Result<bool>`), `Result<T>` (có giá trị), `Error(Code, ErrorType, Message)` + `Fields?` (lỗi nhiều field từ FluentValidation); cả hai `Result` chia chung `IResult` để `LoggingBehavior`/`ResultExtensions` xử lý bằng một nhánh. Constructor `private` — chỉ vào qua `Success()`/`Failure()`, không dựng được trạng thái vô lý (`IsSuccess = true` mà vẫn có `Error`). `.Value` khi đã fail → **ném** `InvalidOperationException`, không trả `default`. **Không** implicit conversion `T → Result<T>` — handler luôn gọi tường minh `Result<int>.Success(...)`.
 
-public record Error(string Code, ErrorType Type, string Message)
-{
-    public static Error NotFound(string code, string msg) => new(code, ErrorType.NotFound, msg);
-    public static Error Conflict(string code, string msg) => new(code, ErrorType.Conflict, msg);
-    public static Error Validation(string code, string msg) => new(code, ErrorType.Validation, msg);
-}
+`Error` mang **`ErrorType`** (Validation/NotFound/Conflict) chứ không phải `string` đơn thuần — nhờ đó `ResultExtensions.ToActionResult` (API, mục 5) map sang HTTP status (200/404/409/400) ở **một chỗ duy nhất**.
 
-public class Result<T>
-{
-    public bool IsSuccess { get; }
-    public T? Value { get; }
-    public Error? Error { get; }
-
-    public static Result<T> Success(T value) => new(true, value, null);
-    public static Result<T> Failure(Error error) => new(false, default, error);
-}
-```
-
-`Error` mang **`ErrorType`** chứ không phải `string` đơn thuần — nhờ đó API map được sang HTTP status ở **một chỗ duy nhất**:
-
-```csharp
-// API/Common/ResultExtensions.cs
-public static IActionResult ToActionResult<T>(this Result<T> result) => result switch
-{
-    { IsSuccess: true }                => new OkObjectResult(result.Value),
-    { Error.Type: ErrorType.NotFound } => new NotFoundObjectResult(result.Error),
-    { Error.Type: ErrorType.Conflict } => new ConflictObjectResult(result.Error),
-    _                                  => new BadRequestObjectResult(result.Error)
-};
-```
+→ Code thật: [`../src/YTTrending.Application/Common/Models/Results/Result.cs`](../src/YTTrending.Application/Common/Models/Results/Result.cs) + [`Error.cs`](../src/YTTrending.Application/Common/Models/Results/Error.cs). Lý do 3 quyết định (Value throw · private ctor · bỏ implicit) + phương án bị loại: [`decisions.md`](decisions.md) mục *Application — Result pattern*.
 
 ## Pipeline Behaviors — chỉ 2 cái
 
-```csharp
-services.AddMediatR(cfg =>
-{
-    cfg.RegisterServicesFromAssembly(typeof(AddChannelCommand).Assembly);
-    cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));      // log tên request + thời gian chạy
-    cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));   // FluentValidation, fail → Result.Failure
-});
-```
+`LoggingBehavior` (log tên request + thời gian) và `ValidationBehavior` (FluentValidation, fail → `Result.Failure`). Đăng ký trong `AddApplication()`, **`AddOpenBehavior(Logging)` trước `Validation`** (Logging bọc ngoài mới log được nhánh validation fail). → Code: [`../src/YTTrending.Application/Common/Behaviors/`](../src/YTTrending.Application/Common/Behaviors/) + [`DependencyInjection.cs`](../src/YTTrending.Application/DependencyInjection.cs); chi tiết [`decisions.md`](decisions.md) mục *Application — pipeline behaviors* và *Application — wiring Options và behaviors*.
 
 **Không có `TransactionBehavior`.** Một `SaveChangesAsync()` đã là một transaction. Chỉ thêm behavior này khi xuất hiện handler gọi `SaveChanges` từ 2 lần trở lên — Phase 1 không có ca nào.
 
 ## EF Core mapping
 
-Dùng Fluent API qua `IEntityTypeConfiguration<T>`, **không** rải Data Annotation lên entity — giữ Domain sạch khỏi chi tiết persistence.
+Dùng Fluent API qua `IEntityTypeConfiguration<T>`, **không** rải Data Annotation lên entity — giữ Domain sạch khỏi chi tiết persistence. Code: [`../src/YTTrending.Infrastructure/Persistence/Configurations/`](../src/YTTrending.Infrastructure/Persistence/Configurations/).
 
-```csharp
-public class VideoConfiguration : IEntityTypeConfiguration<Video>
-{
-    public void Configure(EntityTypeBuilder<Video> builder)
-    {
-        builder.HasKey(v => v.Id);
-        builder.HasIndex(v => v.YoutubeVideoId).IsUnique();    // duplicate-check theo VideoId
-        builder.Property(v => v.Status).HasConversion<string>();
-        builder.HasQueryFilter(v => v.DeletedAt == null);      // soft-delete tự động ẩn
-    }
-}
-```
-
-Hai điểm đáng chú ý:
+Bốn điểm đáng chú ý:
 - `HasQueryFilter` cho soft-delete → không phải nhớ `.Where(v => v.DeletedAt == null)` ở mọi query (khi cần xem cả bản đã xóa thì `.IgnoreQueryFilters()`).
 - Cleanup Job soft-delete hàng loạt bằng `ExecuteUpdateAsync` — một câu UPDATE, không load entity lên memory.
+- `HasMaxLength`/`HasPrecision` **phải khai tay** theo [`database.md`](database.md): không khai thì mọi `string` thành `text`, và `decimal` bị EF cảnh báo thiếu store type.
+- **FK phải khai tay cho `VideoMetricSnapshot` và `TrendingScore`.** Hệ quả trực tiếp của "navigation 1 chiều từ `Video`": không có navigation ở cả hai chiều thì convention EF không nhận ra đây là quan hệ, `video_id` chỉ còn là cột `int` trơn không có ràng buộc.
 
 ## Background Job Hosting
 
 **Đã chốt: `BackgroundService` + `PeriodicTimer` built-in .NET** — không thêm Hangfire/Quartz. Phase 1 single-user, chưa cần retry policy phức tạp hay UI theo dõi job.
 
-Ba job (Sync / Metrics / Cleanup — xem [`domain/background-jobs.md`](domain/background-jobs.md)) đều theo đúng một khuôn:
-
-```csharp
-public class SyncChannelJob(IServiceScopeFactory scopeFactory, IOptionsMonitor<TrackingOptions> options)
-    : BackgroundService
-{
-    protected override async Task ExecuteAsync(CancellationToken ct)
-    {
-        using var timer = new PeriodicTimer(TimeSpan.FromHours(options.CurrentValue.SyncIntervalHours));
-        while (await timer.WaitForNextTickAsync(ct))
-        {
-            using var scope = scopeFactory.CreateScope();          // BẮT BUỘC
-            var sender = scope.ServiceProvider.GetRequiredService<ISender>();
-            await sender.Send(new SyncChannelsCommand(), ct);
-        }
-    }
-}
-```
+Ba job (Sync / Metrics / Cleanup — xem [`domain/background-jobs.md`](domain/background-jobs.md)) đều theo đúng một khuôn (`PeriodicTimer` + `CreateScope()` mỗi tick + `ISender.Send(command)`). Khung code mẫu + cạm bẫy (StopHost, tick đầu, chống chạy chồng): [`../ai/setup-base-notes.md`](../ai/setup-base-notes.md) A21.
 
 Hai điều quan trọng:
 
@@ -271,18 +191,9 @@ Hai điều quan trọng:
 
 ## Configuration
 
-Phase 1 đọc config từ **`appsettings.json` + Options pattern**, validate lúc khởi động:
+Phase 1 đọc config từ **`appsettings.json` + Options pattern**, validate lúc khởi động (`AddOptions<T>().Bind(...).ValidateDataAnnotations().ValidateOnStart()` — sai config → chết lúc start, không chết lúc job chạy 3h sáng). Handler inject `IOptionsMonitor<T>` (không phải `IOptions<T>`) để sửa `appsettings.json` là ăn ngay, khỏi restart. → Nguồn config: [`config.md`](config.md); Options class: [`../src/YTTrending.Application/Common/Options/`](../src/YTTrending.Application/Common/Options/).
 
-```csharp
-services.AddOptions<TrackingOptions>()
-    .Bind(config.GetSection("Tracking"))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();     // sai config → chết lúc start, không chết lúc job chạy 3h sáng
-```
-
-Handler inject `IOptionsMonitor<T>` (không phải `IOptions<T>`) để sửa `appsettings.json` là ăn ngay, khỏi restart.
-
-> ✅ Đã chốt (pending #3 đóng): dùng `appsettings.json`, bảng `app_config` **không tạo** ở Phase 1. [`config.md`](config.md) và [`database.md`](database.md) đã sửa cho khớp.
+> ✅ Đã chốt: dùng `appsettings.json`; bảng `app_config` không thuộc schema hiện tại. [`config.md`](config.md) và [`database.md`](database.md) là nguồn mô tả tương ứng.
 
 ## Thời gian: dùng `TimeProvider`, không dùng `DateTime.UtcNow`
 
@@ -300,27 +211,22 @@ Một test project duy nhất: `tests/YTTrending.Application.Tests/`.
 
 ## External Dependency
 
-**YouTube Data API v3** — cần API key, có quota giới hạn (xem [`decisions.md`](decisions.md) pending #2). Gọi qua typed `HttpClient`:
-
-```csharp
-services.AddHttpClient<IYouTubeClient, YouTubeClient>()
-        .AddStandardResilienceHandler();   // retry + circuit breaker + timeout, 1 dòng
-```
+**YouTube Data API v3** — cần API key, có quota giới hạn (quy mô và phép tính quota ở [`decisions.md`](decisions.md)). Gọi qua typed `HttpClient` + `.AddStandardResilienceHandler()` (retry + circuit breaker + timeout, 1 dòng).
 
 Lưu ý khi quota là mối lo: quota **không** hồi lại khi retry, nên chỉ retry lỗi tạm thời (5xx, timeout) — tuyệt đối không retry lỗi 403 quota exceeded.
 
 ## Đã cân nhắc và bỏ qua
 
+Các quyết định lớn có **lý do đầy đủ ở [`decisions.md`](decisions.md)** — không lặp lại đây: Repository per entity · `TransactionBehavior` · Entity có behavior (static factory + invariant trong entity) · MediatR 13+ (license thương mại) · Hangfire/Quartz. Danh sách "không đưa vào base": [`../ai/setup-base-notes.md`](../ai/setup-base-notes.md) A20/A25.
+
+Còn lại là quyết định phạm-vi-Phase-1, giữ ngắn ở đây:
+
 | Cân nhắc | Quyết định | Lý do |
 |---|---|---|
-| Repository cho từng entity | **Bỏ** | Chỉ có 1 DB, `DbSet` đã là repository — xem mục trên |
-| `TransactionBehavior` | **Bỏ** | 1 `SaveChangesAsync` = 1 transaction, Phase 1 không có handler nào ghi 2 lần |
-| Strongly-typed ID (`VideoId` value object) | **Bỏ (Phase 1)** | Hay để học nhưng kéo theo `HasConversion` ở mọi chỗ; đã có unique index bảo vệ |
-| Domain Events | **Bỏ (Phase 1)** | Chưa có side-effect nào cần tách khỏi luồng chính |
-| MediatR 13+ | **Không nâng** | License thương mại — dừng ở dòng 12.x (Apache-2.0) |
-| Hangfire / Quartz.NET | **Bỏ** | `BackgroundService` đủ cho single-user, không cần thêm dependency + bảng job |
-| .NET Aspire | **Hoãn** | Cân nhắc lại sau khi Phase 1 chạy được, khi cần telemetry/dashboard |
-| Tách 2 test project | **Bỏ** | Gộp còn 1, tách khi thật sự có thứ để test ở Infrastructure |
+| Strongly-typed ID (`VideoId` value object) | Bỏ (Phase 1) | Kéo theo `HasConversion` mọi chỗ; đã có unique index bảo vệ |
+| Domain Events | Bỏ (Phase 1) | Chưa có side-effect nào cần tách khỏi luồng chính |
+| .NET Aspire | Không đưa vào phạm vi hiện tại | Chưa có nhu cầu telemetry/dashboard; chỉ đánh giá lại khi nhu cầu này được xác nhận |
+| Tách 2 test project | Bỏ | Gộp còn 1, tách khi thật sự có thứ để test ở Infrastructure |
 
 ## Liên quan
 

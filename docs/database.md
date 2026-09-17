@@ -39,6 +39,9 @@ Danh sách video Shorts phát hiện được từ các kênh theo dõi.
 | duration_seconds | INT | Thời lượng video (giây) |
 | category | VARCHAR(64), NULL | Danh mục nội dung, chưa dùng ở Phase 1 |
 | status | VARCHAR(16) | Trạng thái vòng đời video: `New` / `Tracking` / `Archived`. Lưu chuỗi qua `HasConversion<string>()`, **không** dùng native Postgres ENUM — xem ghi chú cuối file |
+| latest_views | BIGINT | View tại lần snapshot gần nhất — denormalize từ `video_metric_snapshots` để dashboard filter/sort theo views không phải join. **Discovery seed lần đầu** (bước lọc `MinViewsThreshold` đã cầm sẵn số liệu — xem ghi chú cuối file), sau đó Metrics Update Job ghi đè mỗi lần sync |
+| latest_likes | BIGINT | Like tại lần snapshot gần nhất, cùng cơ chế với `latest_views` |
+| latest_comments | BIGINT | Comment tại lần snapshot gần nhất, cùng cơ chế với `latest_views` |
 | archived_at | TIMESTAMPTZ, NULL | Thời điểm chuyển sang ARCHIVED. Đồng hồ đếm `ArchivedRetentionDays` của Cleanup Job — xem ghi chú cuối file |
 | deleted_at | TIMESTAMPTZ, NULL | Thời điểm soft-delete, NULL nghĩa là chưa xóa |
 | created_at | TIMESTAMPTZ | Thời điểm hệ thống phát hiện video |
@@ -72,7 +75,7 @@ Lịch sử số liệu (views/likes/comments) của video theo từng lần syn
 | velocity_per_hour | NUMERIC(14,2) | Tốc độ tăng view (views/giờ) |
 | view_growth_norm | NUMERIC(5,2) | ViewGrowth đã chuẩn hóa về thang 0–100 |
 | velocity_norm | NUMERIC(5,2) | Velocity đã chuẩn hóa về thang 0–100 |
-| trending_score | NUMERIC(5,2) | Điểm trending cuối cùng, dùng để xếp hạng |
+| score | NUMERIC(5,2) | Điểm trending cuối cùng, dùng để xếp hạng. Tên cột (không phải `trending_score`) vì property tương ứng ở Domain là `TrendingScore.Score` — class không được có member trùng tên class (CS0542) |
 | calculated_at | TIMESTAMPTZ | Thời điểm tính điểm gần nhất |
 
 ---
@@ -87,12 +90,60 @@ Video được bookmark lại để tham khảo ý tưởng.
 | video_id | INT UNIQUE (FK → videos.id) | Video được bookmark, UNIQUE đảm bảo 1 video chỉ bookmark 1 lần |
 | note | TEXT, NULL | Ghi chú tự do của người dùng |
 | created_at | TIMESTAMPTZ | Thời điểm bookmark |
+| updated_at | TIMESTAMPTZ | Thời điểm sửa `note` gần nhất |
 
 ---
 
-## 6. app_config — ⚠️ CHƯA DÙNG Ở PHASE 1
+## 6. sync_runs
 
-> Phase 1 đọc config từ `appsettings.json` + Options pattern ([`config.md`](config.md)), **không tạo bảng này trong migration đầu tiên**. Giữ lại mô tả ở đây cho Phase 2, khi có UI sửa config lúc runtime.
+Tiến độ bền vững của một lượt Sync all. Migration `AddSyncRuns` đã tạo bảng này; mỗi lượt chỉ
+snapshot các channel đang bật tại thời điểm tạo.
+
+| Field | Kiểu dữ liệu | Mô tả |
+|---|---|---|
+| id | INT (PK, identity) | ID nội bộ của lượt sync |
+| trigger_type | VARCHAR(16) | Nguồn tạo lượt: `Manual` / `Scheduled` |
+| status | VARCHAR(32) | `Pending` / `Running` / `Completed` / `CompletedWithIssues` / `Interrupted` / `Failed` |
+| total_count | INT | Số channel enabled tại lúc tạo run |
+| success_count | INT | Số item đã `Succeeded` |
+| skipped_count | INT | Số item đã `Skipped` |
+| failed_count | INT | Số item đã `Failed` |
+| error_code | VARCHAR(128), NULL | Lỗi làm hỏng cả run; lỗi từng channel nằm ở `sync_run_items` |
+| error_message | VARCHAR(1024), NULL | Thông điệp lỗi cấp run |
+| created_at | TIMESTAMPTZ | Thời điểm tạo run |
+| started_at | TIMESTAMPTZ, NULL | Thời điểm worker bắt đầu xử lý |
+| completed_at | TIMESTAMPTZ, NULL | Thời điểm run kết thúc |
+
+Có index trên `status`. Không có cột `processed_count`: API suy ra bằng
+`success_count + skipped_count + failed_count`.
+
+---
+
+## 7. sync_run_items
+
+Snapshot công việc và kết quả của từng channel trong một `sync_run`.
+
+| Field | Kiểu dữ liệu | Mô tả |
+|---|---|---|
+| id | INT (PK, identity) | ID nội bộ của item |
+| sync_run_id | INT (FK → sync_runs.id) | Run sở hữu item; xóa run sẽ cascade xóa item |
+| channel_id | INT | ID channel tại lúc tạo run; **không có FK** để lịch sử còn đọc được sau khi xóa channel |
+| channel_name | VARCHAR(255) | Tên channel snapshot tại lúc tạo run |
+| status | VARCHAR(16) | `Pending` / `Running` / `Succeeded` / `Skipped` / `Failed` |
+| error_code | VARCHAR(128), NULL | Mã lỗi của channel này |
+| error_message | VARCHAR(1024), NULL | Thông điệp lỗi của channel này |
+| started_at | TIMESTAMPTZ, NULL | Thời điểm worker bắt đầu item |
+| completed_at | TIMESTAMPTZ, NULL | Thời điểm item kết thúc |
+
+Index unique `(sync_run_id, channel_id)` ngăn một channel xuất hiện hai lần trong cùng run; index
+`(sync_run_id, status)` phục vụ truy vấn tiến độ. Đây là FK duy nhất của SyncRun: không có liên kết
+từ `channel_id` tới `channels`.
+
+---
+
+## 8. app_config — không thuộc schema hiện tại
+
+> Hệ thống đọc config từ `appsettings.json` + Options pattern ([`config.md`](config.md)), nên **không tạo bảng này trong migration đầu tiên**. Mô tả được giữ làm thiết kế tham chiếu; chỉ tạo bảng khi đã chọn xây UI sửa config lúc runtime.
 
 Cấu hình hệ thống dạng key-value, không hardcode trong code.
 
@@ -106,13 +157,15 @@ Cấu hình hệ thống dạng key-value, không hardcode trong code.
 
 ## Ghi chú lựa chọn kiểu dữ liệu
 
-- **INT / BIGINT (GENERATED ALWAYS AS IDENTITY)** thay vì UUID: đơn giản, đủ dùng cho app cá nhân quy mô nhỏ, join nhanh hơn UUID. Dùng cú pháp `IDENTITY` chuẩn SQL thay vì `SERIAL` (SERIAL là cú pháp cũ của Postgres, tạo sequence ngầm khó quản lý quyền hơn).
+- **INT / BIGINT (GENERATED BY DEFAULT AS IDENTITY)** thay vì UUID: đơn giản, đủ dùng cho app cá nhân quy mô nhỏ, join nhanh hơn UUID. Dùng cú pháp `IDENTITY` chuẩn SQL thay vì `SERIAL` (SERIAL là cú pháp cũ của Postgres, tạo sequence ngầm khó quản lý quyền hơn). Vì sao `BY DEFAULT` chứ không phải `ALWAYS`: xem [`decisions.md`](decisions.md) (Infrastructure / Persistence — mục 4).
 - **TIMESTAMPTZ** cho mọi mốc thời gian: tránh lỗi lệch múi giờ khi server và client khác timezone.
 - **NUMERIC** thay vì FLOAT cho các trường tính toán (score, growth %): tránh sai số dấu phẩy động khi so sánh/sắp xếp.
 - **BIGINT** cho views/likes/comments: video viral có thể vượt giới hạn INT (2.1 tỷ).
 - **VARCHAR cho status, không dùng native Postgres ENUM**: native ENUM chặn giá trị sai chặt hơn, nhưng mỗi lần thêm một trạng thái phải viết migration `ALTER TYPE` thủ công (EF Core không tự sinh), và làm vỡ bước tạo schema khi test bằng Sqlite in-memory. Giá trị hợp lệ đã được `VideoStatus` enum ở tầng Domain chặn rồi.
 - **Tên bảng/cột dùng `snake_case`**: EF Core mặc định sinh `PascalCase`, nên phải bật `UseSnakeCaseNamingConvention()` (package `EFCore.NamingConventions`) — quyết định này phải có **trước migration đầu tiên**.
-- **`created_at` / `updated_at` của `channels` và `videos`** điền tự động: `AppDbContext` override `SaveChanges`/`SaveChangesAsync`, duyệt `ChangeTracker` và lấy giờ từ `TimeProvider` — không set tay ở handler. Lưu ý `ExecuteUpdateAsync` không đi qua `SaveChanges` nên phải tự set `updated_at` trong câu update đó.
-- **`archived_at` là cột bắt buộc, không thể thay bằng `updated_at`**: rule retention ở [`domain/video-lifecycle.md`](domain/video-lifecycle.md) tính từ lúc video **chuyển sang ARCHIVED**, trong khi `updated_at` bị đẩy lại mỗi lần Sync Job sửa title/thumbnail. Dùng `updated_at` làm đồng hồ retention thì video ARCHIVED nào bị đổi tiêu đề sẽ không bao giờ đủ hạn để Cleanup Job dọn. Cột này do `Video.Archive()` set, thuộc nhóm thời gian nghiệp vụ (set tường minh), không phải audit.
+- **`created_at` / `updated_at` của `channels` và `videos`** điền tự động, không set tay ở handler — cơ chế (override `SaveChanges` + `ChangeTracker` + `TimeProvider`) và cạm bẫy `ExecuteUpdateAsync` xem [`../ai/setup-base-notes.md`](../ai/setup-base-notes.md) A4.
+- **`archived_at` là cột riêng, không thay bằng `updated_at`**: retention ([`domain/video-lifecycle.md`](domain/video-lifecycle.md)) tính từ lúc chuyển ARCHIVED, còn `updated_at` bị Sync Job đẩy lại khi sửa title/thumbnail. Cột này do `VideoStateRules.Archive()` set (thời gian nghiệp vụ, không phải audit) — cạm bẫy đầy đủ ở [`../ai/setup-base-notes.md`](../ai/setup-base-notes.md) A4.
+- **`latest_views/likes/comments` seed ngay lúc Discovery, không chờ Metrics Update Job** — lý do + cơ chế ghi đè đã ghi ở cột `latest_views` phía trên; xem thêm [`domain/discovery-engine.md`](domain/discovery-engine.md).
 - **`snapshot_at` và `calculated_at` KHÔNG phải audit field** — chúng là dữ liệu nghiệp vụ (thời điểm đo số liệu / thời điểm tính điểm), phải set tường minh ở chỗ tạo record, không để interceptor điền ngầm.
 - **`DateTimeOffset` cho mọi cột thời gian ở tầng code** (map sang `TIMESTAMPTZ`), không dùng `DateTime` — khớp với `TimeProvider.GetUtcNow()` và không phải đoán `DateTimeKind`.
+- **Thời gian của SyncRun là thời gian nghiệp vụ, không phải audit field**: `SyncRun`/`SyncRunItem` không kế thừa `AuditableEntity`; worker và command set tường minh bằng `TimeProvider` tại từng mốc tạo/chạy/kết thúc.

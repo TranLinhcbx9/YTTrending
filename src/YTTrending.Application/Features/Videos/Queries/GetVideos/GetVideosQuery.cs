@@ -1,0 +1,8 @@
+using YTTrending.Application.Common.Models.Filters;
+using YTTrending.Application.Common.Models.Pagination;
+using YTTrending.Application.Common.Models.Results;
+using YTTrending.Application.Features.Videos.Dtos;
+
+namespace YTTrending.Application.Features.Videos.Queries.GetVideos;
+public record GetVideosQuery : VideoFilter, IRequest<Result<PagedResult<VideoDto>>>;
+

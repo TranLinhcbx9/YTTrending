@@ -26,50 +26,52 @@ Chưa cần: YouTube API thật, job chạy thật, trending score, test project
 
 ## 2. Domain
 
-- [ ] Enum `VideoStatus`
-- [ ] `AuditableEntity` (base class cho `Channel`, `Video`)
-- [ ] 5 entity: `Channel`, `Video`, `VideoMetricSnapshot`, `TrendingScore`, `SavedIdea`
-- [ ] Invariant: `Video.Archive()` chặn terminal-state + set `ArchivedAt`, `Video.StartTracking()` chỉ từ NEW
+- [x] Enum `VideoStatus`
+- [x] `AuditableEntity` (base class cho `Channel`, `Video`)
+- [x] 5 entity: `Channel`, `Video`, `VideoMetricSnapshot`, `TrendingScore`, `SavedIdea`
+- [x] Invariant ở `Application/Common/VideoStateRules.cs` (entity anemic): `Archive()` chặn terminal-state + set `ArchivedAt`, `StartTracking()` chỉ từ NEW
 
-## 3. Application — khối dùng chung
+## 3. Application — khối dùng chung ✅ XONG
 
-- [ ] `Result` / `Result<T>` / `Error` (có `ErrorType` + lỗi nhiều field)
-- [ ] `PagedResult<T>` + `PagedQuery` (có cap page size)
-- [ ] `QueryableExtensions` — `ToPagedResultAsync`, `WhereIf`
-- [ ] `IAppDbContext`
-- [ ] `IYouTubeClient`
-- [ ] `LoggingBehavior` + `ValidationBehavior`
-- [ ] Options: `TrackingOptions`, `TrendingOptions`, `JobOptions` (validate on start)
-- [ ] `AddApplication()`
+- [x] `Result` / `Result<T>` / `Error` (có `ErrorType` + lỗi nhiều field)
+- [x] `PagedResult<T>` + `PagedQuery` (có cap page size)
+- [x] `QueryableExtensions` — `ToPagedResultAsync`, `WhereIf`
+- [x] `IYTTrendingDbContext` — làm sớm ở mục 4 vì `YTTrendingDbContext` cần implement nó
+- [x] `IYouTubeClient`
+- [x] `LoggingBehavior` + `ValidationBehavior`
+- [x] Options: `TrackingOptions`, `TrendingOptions`, `JobOptions` (validate on start)
+- [x] `AddApplication()`
 
-## 4. Infrastructure — Persistence
+## 4. Infrastructure — Persistence ✅ XONG
 
-- [ ] `AppDbContext` (kèm audit tự động lúc SaveChanges)
-- [ ] 5 `IEntityTypeConfiguration` — unique index, query filter soft-delete, enum → string
-- [ ] `AddInfrastructure()` — DbContext + snake_case + bind Options + `TimeProvider`
-- [ ] Migration `InitialCreate` + apply
-- [ ] Auto-migrate lúc startup (có cờ bật/tắt)
+- [x] `YTTrendingDbContext` (kèm audit tự động lúc SaveChanges)
+- [x] 5 `IEntityTypeConfiguration` — unique index, query filter soft-delete, enum → string
+- [x] `AddInfrastructure()` — DbContext + snake_case + `TimeProvider` **(chưa bind Options — chờ mục 3)**
+- [x] Migration `InitialCreate` + apply
+- [x] Auto-migrate lúc startup (có cờ bật/tắt)
 
-## 5. API — wiring
+## 5. API — wiring ✅ XONG
 
-- [ ] Serilog + file sink
-- [ ] Pipeline: exception handler → request logging → CORS → controllers
-- [ ] CORS cho Angular dev server
-- [ ] JSON: camelCase + enum trả string
-- [ ] `ResultExtensions` — map `Result` → HTTP status
-- [ ] `GlobalExceptionHandler`
-- [ ] `appsettings.json` đủ section + user-secrets cho connection string & API key
-- [ ] Port cố định trong `launchSettings.json`
+- [x] Serilog + file sink
+- [x] Pipeline: exception handler → request logging → CORS → controllers
+- [x] CORS cho Angular dev server
+- [x] JSON: camelCase + enum trả string
+- [x] `ResultExtensions` — map `Result` → HTTP status
+- [x] `GlobalExceptionHandler`
+- [x] `appsettings.json` đủ section + user-secrets cho connection string & API key
+- [x] Port cố định trong `launchSettings.json`
 
 ## 6. Slice nghiệm thu
 
-- [ ] `AddChannelCommand` + validator
-- [ ] `GetChannelsQuery` (có paging)
-- [ ] `FakeYouTubeClient`
-- [ ] `ChannelsController`
-- [ ] Seed data cho Development
+- [x] `AddChannelCommand` + validator
+- [x] `GetChannelsQuery` (có paging)
+- [x] `FakeYouTubeClient`
+- [x] `ChannelsController`
+- [x] Seed data cho Development
 
 ## 7. Khung background job
+
+> Gộp thẳng vào bản thật (Sync Channel Job + Metrics Update Job) thay vì làm khung rỗng trước — xem [`../docs/decisions.md`](../docs/decisions.md) mục *Background job thật*. Phần Sync-all hiện theo [`plans/sync-run-async.md`](plans/sync-run-async.md); checklist dưới đây là baseline gốc, giữ lại để tham khảo.
 
 - [ ] `SyncChannelJob` — kill-switch, try/catch, chống chạy chồng
 - [ ] `SyncChannelsCommand` (rỗng, chỉ log)
