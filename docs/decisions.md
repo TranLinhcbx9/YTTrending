@@ -332,23 +332,23 @@ Tài liệu này chỉ lưu quyết định kỹ thuật đang có hiệu lực,
 
 **Xem xét lại khi:** Mở hạng mục test và chốt mức độ cần test với PostgreSQL thật.
 
-### DEC-019 — Docker hóa API
+### DEC-019 — Docker hóa API và promote artifact
 
-**Status:** Cần xác nhận — artifact mới mâu thuẫn với quyết định cũ
+**Status:** Đã chốt — implementation bắt đầu ở Batch 1 của kế hoạch deploy
 
-**References:** [`../Dockerfile`](../Dockerfile), [`../src/YTTrending.API/YTTrending.API.csproj`](../src/YTTrending.API/YTTrending.API.csproj)
+**References:** [`../Dockerfile`](../Dockerfile), [`../src/YTTrending.API/YTTrending.API.csproj`](../src/YTTrending.API/YTTrending.API.csproj), [`../ai/plans/deploy-ghcr-vps.md`](../ai/plans/deploy-ghcr-vps.md)
 
-**Bối cảnh:** Quyết định cũ loại Docker khỏi base, nhưng workspace hiện có `Dockerfile` chưa được theo dõi và file này trỏ tới `YTTrending.Api`, không phải project API hiện tại trong `src/YTTrending.API`.
+**Bối cảnh:** Workspace có `Dockerfile` chưa được theo dõi và file này chưa khớp project API hiện tại. Source repo là public, còn production và deploy runner phải tách sang private deploy repo.
 
-**Quyết định:** Chưa khẳng định Docker là hướng bị loại hay được hỗ trợ; không thay đổi architecture hoặc Dockerfile trong lần rà này.
+**Quyết định:** Sửa Dockerfile ở Batch 1 để build API và migrator Linux images; GitHub-hosted Actions ở public source repo publish hai image lên GHCR sau merge `master`. Production không deploy theo tag: operator lấy full source SHA cùng hai digest từ publish summary và manual-dispatch workflow trong private deploy repo. Private workflow mới pull `image@sha256:...`, có approval và chạy trên self-hosted runner chỉ gắn private repo.
 
-**Lý do:** Artifact hiện tại chưa khớp cấu trúc project nên không chứng minh được một deployment path hoạt động.
+**Lý do:** Tách public build khỏi production credentials/runner, đồng thời digest giữ artifact bất biến, truy vết và rollback được. Không cần credential cross-repo hoặc auto-trigger production từ public source repo.
 
-**Trade-off:** Chưa có môi trường container tái lập được từ artifact hiện tại.
+**Trade-off:** Mỗi production release cần một bước promote thủ công có validation; đổi lại giảm nguy cơ deploy nhầm mutable tag và cho phép kiểm tra migration/backup trước downtime.
 
-**Hệ quả:** Tài liệu không được nói Docker API đã bị loại vĩnh viễn hoặc đã sẵn sàng sử dụng.
+**Hệ quả:** Không dùng `latest`, `master` hoặc tag `sha-...` làm deploy input. Batch 1 phải sửa artifact Docker; Batch 3 phải publish GHCR; Batch 7 phải nhận SHA/digest qua `workflow_dispatch`. Trước khi các batch này pass, Docker deployment chưa được coi là hoạt động.
 
-**Xem xét lại khi:** Xác nhận có duy trì Docker hay không và, nếu có, chốt artifact triển khai hợp lệ.
+**Xem xét lại khi:** Tần suất deploy đủ cao để cần bot tạo PR digest trong private deploy repo; bot vẫn không được tự merge hoặc tự deploy production.
 
 ### DEC-020 — Ước tính quota YouTube
 
@@ -368,20 +368,20 @@ Tài liệu này chỉ lưu quyết định kỹ thuật đang có hiệu lực,
 
 **Xem xét lại khi:** Có số liệu usage của project, cấu hình mục tiêu và implementation Metrics Update.
 
-### DEC-021 — Scope `DbContext` khi xử lý SyncRun
+### DEC-021 — Lỗi DB dừng SyncRun
 
-**Status:** Cần xác nhận — code không cô lập `DbContext` theo channel
+**Status:** Đã chốt
 
 **References:** [`../src/YTTrending.Infrastructure/Jobs/Sync/SyncRunWorker.cs`](../src/YTTrending.Infrastructure/Jobs/Sync/SyncRunWorker.cs), [`../src/YTTrending.Application/Features/Jobs/Commands/ProcessSyncRun/ProcessSyncRunCommandHandler.cs`](../src/YTTrending.Application/Features/Jobs/Commands/ProcessSyncRun/ProcessSyncRunCommandHandler.cs)
 
-**Bối cảnh:** Mô tả cũ về cô lập lỗi theo channel có thể được hiểu là mỗi channel có persistence context riêng.
+**Bối cảnh:** Trong một SyncRun, channel A có thể sync xong, channel B gặp lỗi database, còn channel C chưa chạy.
 
-**Quyết định:** Chưa có quyết định được thực thi về `DbContext` riêng theo channel. Worker tạo một scope cho cả run, nên `ProcessSyncRun` và các `SyncChannelCommand` của run dùng cùng scoped context.
+**Quyết định:** Sau lỗi DB ở channel B, dừng SyncRun; không thử sync các channel C, D còn lại và đánh dấu item chưa hoàn tất là `Skipped`.
 
-**Lý do:** Đây là hành vi quan sát được từ code, không phải một lựa chọn kiến trúc mới được suy ra từ lần rà tài liệu.
+**Lý do:** Một `DbContext` vừa lỗi khi save có thể không còn dùng an toàn cho item sau; hiện không có context mới cho từng channel.
 
-**Trade-off:** Lỗi DB hoặc context không còn dùng được có thể ảnh hưởng các item sau, dù lỗi nghiệp vụ/YouTube của một item vẫn được xử lý từng item khi các lần save thành công.
+**Trade-off:** Các channel còn lại phải chờ một SyncRun mới; đổi lại không tái sử dụng context có thể đã lỗi.
 
-**Hệ quả:** Chỉ được tuyên bố cô lập outcome nghiệp vụ theo item, không tuyên bố cô lập persistence failure theo channel.
+**Hệ quả:** Handler hiện đã cố chuyển run sang `Failed` và item chưa hoàn tất sang `Skipped`. Việc chốt này vẫn phụ thuộc lần `SaveChangesAsync` cuối thành công; nếu DB không lưu được, recovery ở lần worker khởi động sau sẽ thử chốt run còn dang dở.
 
-**Xem xét lại khi:** Xác nhận có cần scope/Unit of Work riêng theo channel hay giữ hành vi hiện tại.
+**Xem xét lại khi:** Cần tiếp tục các channel còn lại sau lỗi DB hoặc cần retry bền vững.
