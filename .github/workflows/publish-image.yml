@@ -1,0 +1,97 @@
+name: publish
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+env:
+  API_IMAGE: ghcr.io/tranlinhcbx9/yttrending-api
+  MIGRATOR_IMAGE: ghcr.io/tranlinhcbx9/yttrending-migrator
+
+jobs:
+  publish:
+    name: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore YTTrending.sln
+
+      - name: Build
+        run: dotnet build YTTrending.sln --configuration Release --no-restore
+
+      - name: Capture immutable identity
+        id: identity
+        shell: bash
+        run: |
+          printf 'created=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+          printf 'publish_id=%s.%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API
+        id: api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: api
+          pull: true
+          push: true
+          tags: ${{ env.API_IMAGE }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.identity.outputs.created }}
+            org.opencontainers.image.version=sha-${{ github.sha }}
+            io.yttrending.publish-id=${{ steps.identity.outputs.publish_id }}
+
+      - name: Build and push migrator
+        id: migrator
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: migrator
+          pull: true
+          push: true
+          tags: ${{ env.MIGRATOR_IMAGE }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.identity.outputs.created }}
+            org.opencontainers.image.version=sha-${{ github.sha }}
+            io.yttrending.publish-id=${{ steps.identity.outputs.publish_id }}
+
+      - name: Publish canonical references
+        shell: bash
+        run: |
+          {
+            echo '## Published OCI images'
+            echo '```text'
+            printf 'source_sha=%s\n' '${{ github.sha }}'
+            printf 'api=%s@%s\n' '${{ env.API_IMAGE }}' '${{ steps.api.outputs.digest }}'
+            printf 'migrator=%s@%s\n' '${{ env.MIGRATOR_IMAGE }}' '${{ steps.migrator.outputs.digest }}'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
