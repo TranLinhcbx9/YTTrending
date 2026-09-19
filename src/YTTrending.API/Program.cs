@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;   // MigrateAsync
 using Serilog;                         // UseSerilog / UseSerilogRequestLogging
 using YTTrending.Application.Common.Interfaces.Persistence;
@@ -20,6 +21,11 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();   // bắt lỗi chưa xử lý -> 500 JSON gọn
 builder.Services.AddProblemDetails();                             // UseExceptionHandler() rỗng cần dịch vụ này
+
+builder.Services.AddHealthChecks()
+                .AddDbContextCheck<YTTrendingDbContext>(
+                    name: "postgres",
+                    tags: ["ready"]);
 
 // Cho Angular (khác origin) gọi API; danh sách origin đọc từ config, không hardcode
 builder.Services.AddCors(o => o.AddPolicy(CorsPolicy, p => p
@@ -57,6 +63,16 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
     app.UseCors(CorsPolicy);        // CORS phải chạy TRƯỚC MapControllers
 }
+
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false,
+});
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+});
 
 app.MapControllers();
 
